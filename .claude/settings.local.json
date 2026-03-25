@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(composer require:*)",
+      "Bash(npm run:*)",
+      "Read(//tmp/**)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//d/lara/www/ticket/**)",
+      "Bash(done)",
+      "Bash(php -l app/Services/CheckoutService.php)",
+      "Bash(php -l app/Services/ReservationService.php)",
+      "Bash(php -l app/Http/Controllers/CheckoutController.php)",
+      "Bash(php -l app/Http/Controllers/ReservationController.php)",
+      "Bash(npm install:*)",
+      "Bash(node -e \"const icons = require\\(''./node_modules/@coreui/icons/dist/cjs/index.js''\\); const keys = Object.keys\\(icons\\).filter\\(k => k.startsWith\\(''cil''\\)\\).slice\\(0, 80\\).join\\(''\\\\n''\\); console.log\\(keys\\);\")",
+      "Bash(node -e \"const icons = require\\(''./node_modules/@coreui/icons/dist/cjs/index.js''\\); const keys = Object.keys\\(icons\\).filter\\(k => k.match\\(/cil\\(Tag|Ticket|Card|Shield|Qr|Code|Scan|People|Cloud|Home|Speed|List|Search|Plus|Pencil|Trash|Lock|Check|X|Menu|User|Log\\)/i\\)\\).join\\(''\\\\n''\\); console.log\\(keys\\);\")",
+      "Bash(node -e \"const icons = require\\(''./node_modules/@coreui/icons/dist/cjs/index.js''\\); const keys = Object.keys\\(icons\\).filter\\(k => k.match\\(/cil\\(Account|Credit|Log|Wallet|Money|Cash|Pay|Dollar\\)/i\\)\\).join\\(''\\\\n''\\); console.log\\(keys\\);\")",
+      "Bash(node -e \"const pkg = require\\(''./node_modules/@coreui/coreui/package.json''\\); console.log\\(pkg.version\\)\")",
+      "Bash(node -e \"const icons = require\\(''@coreui/icons''\\); console.log\\(Object.keys\\(icons\\).filter\\(k => k.toLowerCase\\(\\).includes\\(''calendar''\\) || k.toLowerCase\\(\\).includes\\(''transfer''\\) || k.toLowerCase\\(\\).includes\\(''swap''\\) || k.toLowerCase\\(\\).includes\\(''tag''\\)\\).join\\(''\\\\n''\\)\\)\")",
+      "Bash(node -e \"const icons = require\\(''@coreui/icons''\\); console.log\\(Object.keys\\(icons\\).filter\\(k => k.toLowerCase\\(\\).includes\\(''setting''\\) || k.toLowerCase\\(\\).includes\\(''cog''\\) || k.toLowerCase\\(\\).includes\\(''wrench''\\) || k.toLowerCase\\(\\).includes\\(''sliders''\\)\\).join\\(''\\\\n''\\)\\)\")",
+      "Bash(node -e \"const icons = require\\(''./node_modules/@coreui/icons/js/brands.js''\\); const free = require\\(''./node_modules/@coreui/icons/js/free.js''\\); const keys = Object.keys\\({...icons,...free}\\); console.log\\(keys.filter\\(k => k.toLowerCase\\(\\).includes\\(''envelope''\\) || k.toLowerCase\\(\\).includes\\(''send''\\)\\)\\)\")",
+      "Bash(node -e \"const icons = require\\(''d:/lara/www/ticket/node_modules/@coreui/icons''\\); const keys = Object.keys\\(icons\\); console.log\\(keys.filter\\(k => /envelope|send/i.test\\(k\\)\\)\\)\")"
+    ]
+  }
+}
