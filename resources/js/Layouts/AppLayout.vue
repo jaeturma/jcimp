@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     CSidebar, CSidebarBrand, CSidebarNav, CSidebarToggler,
@@ -9,16 +9,32 @@ import {
     CDropdownItem, CDropdownDivider, CAvatar,
 } from '@coreui/vue';
 
-const page     = usePage();
-const auth     = computed(() => page.props.auth);
-const isGuest  = computed(() => !auth.value?.user);
-const isAdmin  = computed(() => auth.value?.isAdmin  ?? false);
-const isStaff  = computed(() => auth.value?.isStaff  ?? false);
-const userName = computed(() => auth.value?.user?.name ?? 'Guest');
-const userRole = computed(() => auth.value?.userRole  ?? '');
+const page      = usePage();
+const auth      = computed(() => page.props.auth);
+const isGuest   = computed(() => !auth.value?.user);
+const isAdmin   = computed(() => auth.value?.isAdmin ?? false);
+const isSuperAdmin = computed(() => auth.value?.userRole === 'super_admin');
+const isManager = computed(() => auth.value?.isManager ?? false);
+const isValidator = computed(() => auth.value?.isValidator ?? false);
+const isStaff   = computed(() => auth.value?.isStaff ?? false);
+const isOperator = computed(() => auth.value?.hasOperatorAccess ?? false);
+const userName  = computed(() => auth.value?.user?.name ?? 'Guest');
+const userRole  = computed(() => auth.value?.userRole ?? '');
 
 // Start visible on desktop, hidden on mobile
 const sidebarVisible = ref(true);
+const showAdminMenu = ref(true);
+const showOperations = ref(true);
+const showAccountMenu = ref(true);
+
+// Expand menus when dashboard is loaded
+watch(() => page.url, (newUrl) => {
+    if (newUrl === '/dashboard') {
+        showAdminMenu.value = true;
+        showOperations.value = true;
+        showAccountMenu.value = true;
+    }
+});
 
 function logout() { router.post(route('logout')); }
 
@@ -46,15 +62,12 @@ const roleBadgeColor = computed(() => {
         colorScheme="dark"
         @visible-change="v => sidebarVisible = v"
     >
-        <CSidebarBrand class="sidebar-brand-jci">
+        <CSidebarBrand class="sidebar-brand-jci text-start">
             <img src="/jci_logo.png" alt="JCI Logo" class="jci-sidebar-logo" />
-            <span class="sidebar-brand-full fw-bold ms-2">JCI MP</span>
+            <span class="sidebar-brand-full fw-bold ms-2">MP Tickets</span>
         </CSidebarBrand>
 
         <CSidebarNav>
-            <!-- User -->
-            <CNavTitle>User</CNavTitle>
-
             <CNavItem v-if="!isGuest">
                 <Link :href="route('dashboard')" class="nav-link">
                     <CIcon customClassName="nav-icon" icon="cil-speedometer" />
@@ -76,96 +89,136 @@ const roleBadgeColor = computed(() => {
                 </Link>
             </CNavItem>
 
-            <!-- Admin -->
-            <template v-if="isAdmin">
-                <CNavTitle>Administration</CNavTitle>
-
+            <!-- Admin / Operators -->
+            <template v-if="isOperator">
                 <CNavItem>
-                    <Link :href="route('admin.dashboard')" class="nav-link">
-                        <CIcon customClassName="nav-icon" icon="cil-home" />
-                        Admin Dashboard
-                    </Link>
+                    <a href="#" class="nav-link d-flex justify-content-between align-items-center" @click.prevent="showAdminMenu = !showAdminMenu">
+                        <span>Administration</span>
+                        <span class="fw-bold">{{ showAdminMenu ? '▾' : '▸' }}</span>
+                    </a>
                 </CNavItem>
+                <div v-show="showAdminMenu" class="ms-2">
+                    <CNavItem v-if="isAdmin || isManager">
+                        <Link :href="route('admin.dashboard')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-home" />
+                            Admin Dashboard
+                        </Link>
+                    </CNavItem>
 
-                <CNavItem>
-                    <Link :href="route('admin.events')" class="nav-link">
-                        <CIcon customClassName="nav-icon" icon="cil-calendar" />
-                        Manage Events
-                    </Link>
-                </CNavItem>
+                    <CNavItem v-if="isSuperAdmin">
+                        <Link :href="route('admin.users')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-user" />
+                            Users
+                        </Link>
+                    </CNavItem>
 
-                <CNavItem>
-                    <Link :href="route('admin.tickets')" class="nav-link">
-                        <CIcon customClassName="nav-icon" icon="cil-list" />
-                        Ticket Tiers
-                    </Link>
-                </CNavItem>
+                    <CNavItem v-if="isSuperAdmin">
+                        <Link :href="route('admin.roles')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-shield-alt" />
+                            Roles
+                        </Link>
+                    </CNavItem>
 
-                <CNavItem>
-                    <Link :href="route('admin.orders')" class="nav-link">
-                        <CIcon customClassName="nav-icon" icon="cil-credit-card" />
-                        Orders
-                    </Link>
-                </CNavItem>
+                    <CNavItem v-if="isSuperAdmin">
+                        <Link :href="route('admin.permissions')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-lock-locked" />
+                            Permissions
+                        </Link>
+                    </CNavItem>
 
-                <CNavItem>
-                    <Link :href="route('admin.payments')" class="nav-link">
-                        <CIcon customClassName="nav-icon" icon="cil-check-circle" />
-                        Manual Payments
-                    </Link>
-                </CNavItem>
+                    <CNavItem v-if="isAdmin || isManager">
+                        <Link :href="route('admin.events')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-calendar" />
+                            Manage Events
+                        </Link>
+                    </CNavItem>
 
-                <CNavItem>
-                    <Link :href="route('admin.verifications')" class="nav-link">
-                        <CIcon customClassName="nav-icon" icon="cil-shield-alt" />
-                        Verifications
-                    </Link>
-                </CNavItem>
+                    <CNavItem v-if="isAdmin || isManager">
+                        <Link :href="route('admin.tickets')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-list" />
+                            Ticket Tiers
+                        </Link>
+                    </CNavItem>
 
-                <CNavItem>
-                    <Link :href="route('admin.settings')" class="nav-link">
-                        <CIcon customClassName="nav-icon" icon="cil-settings" />
-                        System Settings
-                    </Link>
-                </CNavItem>
+                    <CNavItem>
+                        <Link :href="route('admin.orders')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-credit-card" />
+                            Ticket Orders
+                        </Link>
+                    </CNavItem>
+
+                    <CNavItem v-if="isAdmin || isManager">
+                        <Link :href="route('admin.payments')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-check-circle" />
+                            Payments
+                        </Link>
+                    </CNavItem>
+
+                    <CNavItem>
+                        <Link :href="route('admin.verifications')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-shield-alt" />
+                            Verifications
+                        </Link>
+                    </CNavItem>
+
+                    <CNavItem v-if="isAdmin">
+                        <Link :href="route('admin.settings')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-settings" />
+                            System Settings
+                        </Link>
+                    </CNavItem>
+                </div>
             </template>
 
-            <!-- Staff -->
-            <template v-if="isAdmin || isStaff">
-                <CNavTitle>Operations</CNavTitle>
+            <!-- Staff/Validator/Manager -->
+            <template v-if="isOperator">
                 <CNavItem>
-                    <Link :href="route('admin.scanner')" class="nav-link">
-                        <CIcon customClassName="nav-icon" icon="cil-qr-code" />
-                        Ticket Scanner
-                    </Link>
+                    <a href="#" class="nav-link d-flex justify-content-between align-items-center" @click.prevent="showOperations = !showOperations">
+                        <span>Operations</span>
+                        <span class="fw-bold">{{ showOperations ? '▾' : '▸' }}</span>
+                    </a>
                 </CNavItem>
+                <div v-show="showOperations" class="ms-2">
+                    <CNavItem>
+                        <Link :href="route('admin.scanner')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-qr-code" />
+                            Ticket Scanner
+                        </Link>
+                    </CNavItem>
+                </div>
             </template>
 
             <!-- Account -->
-            <template v-if="!isGuest">
-                <CNavTitle>Account</CNavTitle>
-                <CNavItem>
-                    <Link :href="route('profile.edit')" class="nav-link">
-                        <CIcon customClassName="nav-icon" icon="cil-user" />
-                        My Profile
-                    </Link>
-                </CNavItem>
-                <CNavItem>
-                    <a href="#" class="nav-link" @click.prevent="logout">
-                        <CIcon customClassName="nav-icon" icon="cil-account-logout" />
-                        Logout
-                    </a>
-                </CNavItem>
-            </template>
-            <template v-else>
-                <CNavTitle>Account</CNavTitle>
-                <CNavItem>
-                    <Link :href="route('login')" class="nav-link">
-                        <CIcon customClassName="nav-icon" icon="cil-account-logout" />
-                        Login
-                    </Link>
-                </CNavItem>
-            </template>
+            <CNavItem>
+                <a href="#" class="nav-link d-flex justify-content-between align-items-center" @click.prevent="showAccountMenu = !showAccountMenu">
+                    <span>Account</span>
+                    <span class="fw-bold">{{ showAccountMenu ? '▾' : '▸' }}</span>
+                </a>
+            </CNavItem>
+            <div v-show="showAccountMenu" class="ms-2">
+                <template v-if="!isGuest">
+                    <CNavItem>
+                        <Link :href="route('profile.edit')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-user" />
+                            My Profile
+                        </Link>
+                    </CNavItem>
+                    <CNavItem>
+                        <a href="#" class="nav-link" @click.prevent="logout">
+                            <CIcon customClassName="nav-icon" icon="cil-account-logout" />
+                            Logout
+                        </a>
+                    </CNavItem>
+                </template>
+                <template v-else>
+                    <CNavItem>
+                        <Link :href="route('login')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-account-logout" />
+                            Login
+                        </Link>
+                    </CNavItem>
+                </template>
+            </div>
         </CSidebarNav>
 
         <CSidebarToggler />
@@ -242,12 +295,13 @@ const roleBadgeColor = computed(() => {
 .sidebar-brand-jci {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    gap: .5rem;
     padding: .75rem 1rem;
 }
 .jci-sidebar-logo {
-    height: 32px;
-    width: 32px;
+    height: 64px;
+    width: 64px;
     object-fit: contain;
     border-radius: 6px;
     flex-shrink: 0;

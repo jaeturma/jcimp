@@ -31,13 +31,23 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
 
+        $can = $user
+            ? $user->getAllPermissions()->pluck('name')
+                ->mapWithKeys(fn ($p) => [$p => true])
+                ->toArray()
+            : [];
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user'     => $user,
-                'isAdmin'  => $user?->isAdminOrAbove() ?? false,
-                'isStaff'  => $user?->isStaff()        ?? false,
-                'userRole' => $user?->getRoleNames()->first() ?? 'guest',
+                'user'       => $user,
+                'can'        => $can,
+                'isAdmin'    => $user?->isAdminOrAbove() ?? false,
+                'isManager'  => $user?->isManager() ?? false,
+                'isValidator'=> $user?->isValidator() ?? false,
+                'isStaff'    => $user?->isStaff() ?? false,
+                'hasOperatorAccess' => $user?->hasOperatorAccess() ?? false,
+                'userRole'   => $user?->getRoleNames()->first() ?? 'guest',
             ],
             'recaptchaSiteKey' => config('services.recaptcha.site_key'),
         ];

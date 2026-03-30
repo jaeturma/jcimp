@@ -12,7 +12,7 @@ class AdminMiddleware
     {
         $user = $request->user();
 
-        if (! $user || ! $user->hasAnyRole(['super_admin', 'admin'])) {
+        if (! $user || ! $user->hasAnyRole(['super_admin', 'admin', 'manager', 'validator', 'staff'])) {
             if ($request->expectsJson()) {
                 return response()->json(['message' => 'Unauthorized.'], 403);
             }

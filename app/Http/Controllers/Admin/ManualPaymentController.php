@@ -12,21 +12,27 @@ use Illuminate\Support\Facades\Storage;
 
 class ManualPaymentController extends Controller
 {
-    public function __construct(private readonly PaymentService $paymentService)
-    {
-        $this->middleware('auth');
-        $this->middleware('admin');
-    }
+    public function __construct(private readonly PaymentService $paymentService) {}
 
     /**
      * List all manual payment submissions.
      */
     public function index(Request $request): JsonResponse
     {
+        if (!auth()->user()->hasRole('super_admin')) {
+            $this->authorize('review manual payments');
+        }
+
+        $perPage = min((int) $request->input('per_page', 20), 100);
+
         $payments = ManualPayment::with(['order'])
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
+            ->when($request->search, fn ($q) => $q->whereHas('order', fn ($oq) => $oq
+                ->where('email', 'like', '%' . $request->search . '%')
+                ->orWhere('reference', 'like', '%' . $request->search . '%')
+            ))
             ->latest()
-            ->paginate(20);
+            ->paginate($perPage);
 
         return response()->json($payments);
     }
@@ -36,6 +42,10 @@ class ManualPaymentController extends Controller
      */
     public function show(ManualPayment $manualPayment): JsonResponse
     {
+        if (!auth()->user()->hasRole('super_admin')) {
+            $this->authorize('review manual payments');
+        }
+
         return response()->json([
             'payment'   => $manualPayment->load(['order.items.ticket']),
             'proof_url' => route('admin.proof', $manualPayment->id),
@@ -57,6 +67,10 @@ class ManualPaymentController extends Controller
      */
     public function review(ReviewPaymentRequest $request, ManualPayment $manualPayment): JsonResponse
     {
+        if (!auth()->user()->hasRole('super_admin')) {
+            $this->authorize('review manual payments');
+        }
+
         if (! $manualPayment->isPending()) {
             return response()->json(['message' => 'This payment has already been reviewed.'], 422);
         }

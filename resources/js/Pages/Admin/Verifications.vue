@@ -6,13 +6,14 @@ import axios from 'axios';
 
 const verifications = ref([]);
 const loading       = ref(true);
+const loadError     = ref('');
 const selected      = ref(null);
 const detailLoading = ref(false);
 const rejectPanel   = ref(false);
 const rejectReason  = ref('');
 const submitting    = ref(false);
 
-const filters    = ref({ status: 'pending', search: '' });
+const filters    = ref({ status: '', search: '' });
 const perPage    = ref(10);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0 });
 const statusOpts = ['', 'pending', 'approved', 'rejected'];
@@ -22,6 +23,7 @@ watch([filters, perPage], () => { pagination.value.current_page = 1; load(1); },
 
 async function load(page = 1) {
     loading.value = true;
+    loadError.value = '';
     try {
         const res = await axios.get('/api/admin/student-verifications', {
             params: { ...filters.value, page, per_page: perPage.value },
@@ -29,7 +31,8 @@ async function load(page = 1) {
         verifications.value = res.data.data;
         pagination.value    = res.data.meta ?? { current_page: 1, last_page: 1, total: 0 };
     } catch (e) {
-        console.error(e);
+        loadError.value = e.response?.data?.message ?? e.response?.statusText ?? 'Failed to load verifications.';
+        console.error('Verifications load error:', e.response?.status, e.response?.data);
     } finally {
         loading.value = false;
     }
@@ -132,7 +135,9 @@ const typeColor   = (t) => t === 'college' ? 'info' : 'primary';
                     <CSpinner color="primary" />
                     <p class="mt-2 mb-0">Loading verifications…</p>
                 </div>
-
+                <CAlert v-else-if="loadError" color="danger" class="m-3">
+                    <strong>Error loading verifications:</strong> {{ loadError }}
+                </CAlert>
                 <div v-else class="table-responsive">
                     <CTable hover striped class="mb-0 align-middle">
                         <CTableHead class="table-light">

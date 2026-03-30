@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Jobs\GenerateTicketJob;
 use App\Models\ManualPayment;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Reservation;
 use App\Models\Ticket;
 use Illuminate\Http\UploadedFile;
@@ -164,6 +165,65 @@ class PaymentService
         });
 
         GenerateTicketJob::dispatch($order->id);
+    }
+
+    /**
+     * Directly issue tickets for a walk-in / cash / e-wallet payment.
+     *
+     * Creates an order already in 'paid' status — no reservation or proof needed.
+     * Dispatches ticket generation + email immediately after.
+     *
+     * @param  string       $email         Recipient email
+     * @param  array        $items         [['ticket_id' => int, 'quantity' => int], ...]
+     * @param  string       $paymentMethod 'cash' | 'gcash' | 'paymaya' | 'gotyme' | 'manual' | 'qrph'
+     * @param  string|null  $referenceNo   Optional payment reference / transaction number
+     * @throws RuntimeException            If any ticket has insufficient availability
+     */
+    public function directIssue(string $email, array $items, string $paymentMethod = 'cash', ?string $referenceNo = null): Order
+    {
+        $order = DB::transaction(function () use ($email, $items, $paymentMethod, $referenceNo) {
+            $itemData = [];
+
+            foreach ($items as $item) {
+                $ticket   = Ticket::lockForUpdate()->findOrFail($item['ticket_id']);
+                $quantity = (int) $item['quantity'];
+
+                if ($ticket->availableQuantity() < $quantity) {
+                    throw new RuntimeException("Not enough tickets available for: {$ticket->name}");
+                }
+
+                $itemData[] = ['ticket' => $ticket, 'quantity' => $quantity, 'price' => $ticket->price];
+            }
+
+            $total = array_sum(array_map(fn ($i) => $i['price'] * $i['quantity'], $itemData));
+
+            $order = Order::create([
+                'reference'         => Order::generateReference(),
+                'email'             => $email,
+                'status'            => 'paid',
+                'payment_method'    => $paymentMethod,
+                'total_amount'      => $total,
+                'gateway_reference' => $referenceNo ?: null,
+            ]);
+
+            foreach ($itemData as $item) {
+                $order->items()->create([
+                    'ticket_id' => $item['ticket']->id,
+                    'quantity'  => $item['quantity'],
+                    'price'     => $item['price'],
+                ]);
+
+                Ticket::where('id', $item['ticket']->id)->update([
+                    'sold_quantity' => DB::raw("sold_quantity + {$item['quantity']}"),
+                ]);
+            }
+
+            return $order;
+        });
+
+        GenerateTicketJob::dispatch($order->id);
+
+        return $order;
     }
 
     /**

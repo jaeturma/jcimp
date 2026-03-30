@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import axios from 'axios';
 
@@ -22,6 +22,9 @@ const coverFile = ref(null);
 const coverUploading = ref(false);
 const coverMsg = ref('');
 
+const page = usePage();
+const canModifyEvents = computed(() => !!page.props.auth?.isAdmin);
+const canViewEvents = computed(() => !!(page.props.auth?.isAdmin || page.props.auth?.isManager));
 const isEditing = computed(() => !!editingEvent.value);
 
 onMounted(() => load());
@@ -47,6 +50,11 @@ async function load(page = 1) {
 }
 
 function openCreate() {
+    if (!canModifyEvents.value) {
+        formError.value = 'You do not have permission to create events.';
+        return;
+    }
+
     editingEvent.value = null;
     form.value = { name: '', description: '', venue: '', event_date: '', is_active: true };
     formError.value = '';
@@ -56,6 +64,11 @@ function openCreate() {
 }
 
 function openEdit(event) {
+    if (!canModifyEvents.value) {
+        formError.value = 'You do not have permission to edit events.';
+        return;
+    }
+
     editingEvent.value = event;
     form.value = { ...event, event_date: event.event_date ? event.event_date.split('T')[0] : '' };
     formError.value = '';
@@ -150,7 +163,7 @@ const propertyStatus = (event) => event.is_active ? 'Active' : 'Inactive';
         <div class="page-header">
             <h1 class="page-title">Manage Events</h1>
             <div class="page-actions">
-                <CButton color="primary" @click="openCreate">
+                <CButton v-if="canModifyEvents" color="primary" @click="openCreate">
                     <CIcon icon="cil-plus" class="me-1" /> New Event
                 </CButton>
             </div>
@@ -220,8 +233,8 @@ const propertyStatus = (event) => event.is_active ? 'Active' : 'Inactive';
                                     <span v-else class="text-muted small">No cover</span>
                                 </CTableDataCell>
                                 <CTableDataCell class="text-end">
-                                    <CButton size="sm" color="info" variant="outline" class="me-1" @click="openEdit(event)">Edit</CButton>
-                                    <CButton size="sm" color="danger" variant="outline" @click="removeEvent(event)" :disabled="deleting">Delete</CButton>
+                                    <CButton v-if="canModifyEvents" size="sm" color="info" variant="outline" class="me-1" @click="openEdit(event)">Edit</CButton>
+                                    <CButton v-if="canModifyEvents" size="sm" color="danger" variant="outline" @click="removeEvent(event)" :disabled="deleting">Delete</CButton>
                                 </CTableDataCell>
                             </CTableRow>
                             <CTableRow v-if="!events.length">

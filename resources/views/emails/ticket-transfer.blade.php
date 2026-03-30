@@ -58,7 +58,7 @@
         </p>
     </div>
     <div class="footer">
-        &copy; {{ date('Y') }} Event Ticketing. All rights reserved.
+        &copy; {{ date('Y') }} JJ Networks NDS. All rights reserved.
     </div>
 </div>
 </body>

@@ -33,22 +33,30 @@ class ReservationController extends Controller
             'student_access_token'   => ['nullable', 'string'],
         ]);
 
-        // If cart contains a student ticket, validate the student access token
+        // If cart contains a student ticket, validate student verification
         $hasStudentTicket = collect($request->input('items'))->contains(function ($item) {
             return Ticket::find($item['ticket_id'])?->type === 'student';
         });
 
         if ($hasStudentTicket) {
-            $token = $request->input('student_access_token');
-            if (!$token) {
-                return response()->json(['message' => 'Student verification required. Please verify your student email first.'], 422);
-            }
-            $sv = StudentVerification::where('access_token', $token)
-                ->where('status', 'approved')
-                ->where('token_expires_at', '>', now())
-                ->first();
-            if (!$sv) {
-                return response()->json(['message' => 'Student verification token is invalid or expired. Please re-verify your student email.'], 422);
+            $user = $request->user();
+
+            // Logged-in user with verified student status — no token needed
+            if ($user && $user->canBuyStudentTicket()) {
+                // verified ✓
+            } else {
+                // Guest or unverified user — require a valid student access token
+                $token = $request->input('student_access_token');
+                if (!$token) {
+                    return response()->json(['message' => 'Student verification required. Please verify your student email first.'], 422);
+                }
+                $sv = StudentVerification::where('access_token', $token)
+                    ->where('status', 'approved')
+                    ->where('token_expires_at', '>', now())
+                    ->first();
+                if (!$sv) {
+                    return response()->json(['message' => 'Student verification token is invalid or expired. Please re-verify your student email.'], 422);
+                }
             }
         }
 

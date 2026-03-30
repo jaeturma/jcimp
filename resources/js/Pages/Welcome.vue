@@ -212,7 +212,7 @@ const formattedDate = computed(() => {
                 </div>
                 <hr style="border-color:rgba(255,255,255,0.1);margin:1rem 0" />
                 <p class="text-center mb-0 small" style="color:rgba(255,255,255,0.45)">
-                    &copy; {{ new Date().getFullYear() }} {{ event?.name ?? 'Event Tickets' }}. All rights reserved.
+                    &copy; {{ new Date().getFullYear() }} JJ Networks NDS. All rights reserved.
                 </p>
             </div>
         </footer>

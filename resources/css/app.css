@@ -2,3 +2,20 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Ensure admin/system settings icons are sized consistently and not too large. */
+.nav-icon,
+.c-icon,
+.c-icon svg {
+    width: 1.1rem !important;
+    height: 1.1rem !important;
+    font-size: 1.1rem !important;
+}
+
+/* In case any other icon variants are inflated in system settings */
+.page-title + .card .nav-icon,
+.page-title + .card .c-icon {
+    width: 1.1rem !important;
+    height: 1.1rem !important;
+}
+

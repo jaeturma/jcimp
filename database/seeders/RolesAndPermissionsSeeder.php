@@ -17,12 +17,39 @@ class RolesAndPermissionsSeeder extends Seeder
         // ── Permissions ───────────────────────────────────────────────────────
 
         $permissions = [
-            'manage tickets',
-            'manage orders',
+            // Event CRUD
+            'view events',
+            'create events',
+            'update events',
+            'delete events',
+            // Ticket tiers CRUD
+            'view tickets',
+            'create tickets',
+            'update tickets',
+            'delete tickets',
+            // Order and workflows
+            'view orders',
+            'create orders',
+            'update orders',
+            'delete orders',
             'review manual payments',
+            'verify students',
             'scan tickets',
             'view dashboard',
-            'verify students',
+            'manage settings',
+            // User management
+            'view users',
+            'create users',
+            'update users',
+            'delete users',
+            // Role management
+            'view roles',
+            'create roles',
+            'update roles',
+            'delete roles',
+            // Permission management
+            'view permissions',
+            'assign permissions',
         ];
 
         foreach ($permissions as $permission) {
@@ -33,24 +60,51 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $superAdmin = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
         $admin      = Role::firstOrCreate(['name' => 'admin',       'guard_name' => 'web']);
+        $manager    = Role::firstOrCreate(['name' => 'manager',     'guard_name' => 'web']);
+        $validator  = Role::firstOrCreate(['name' => 'validator',   'guard_name' => 'web']);
         $staff      = Role::firstOrCreate(['name' => 'staff',       'guard_name' => 'web']);
 
         // super_admin → all permissions
         $superAdmin->syncPermissions(Permission::all());
 
-        // admin → all except scan tickets
+        // admin → full management
         $admin->syncPermissions([
-            'manage tickets',
-            'manage orders',
-            'review manual payments',
             'view dashboard',
+            'view events', 'create events', 'update events', 'delete events',
+            'view tickets', 'create tickets', 'update tickets', 'delete tickets',
+            'view orders', 'create orders', 'update orders', 'delete orders',
+            'review manual payments',
             'verify students',
+            'scan tickets',
+            'manage settings',
         ]);
 
-        // staff → scan tickets, view dashboard
-        $staff->syncPermissions([
-            'scan tickets',
+        // manager → event view + no event mutations, ticket view/edit no create/delete, payment verification, orders, scan, student verify
+        $manager->syncPermissions([
             'view dashboard',
+            'view events',
+            'view tickets', 'update tickets',
+            'view orders', 'update orders',
+            'review manual payments',
+            'verify students',
+            'scan tickets',
+        ]);
+
+        // staff → scan tickets, view dashboard, orders, student verifications
+        $staff->syncPermissions([
+            'view dashboard',
+            'view orders',
+            'review manual payments',
+            'verify students',
+            'scan tickets',
+        ]);
+
+        // validator → scan + orders + student verify
+        $validator->syncPermissions([
+            'view dashboard',
+            'view orders',
+            'verify students',
+            'scan tickets',
         ]);
 
         $this->command->info('Roles and permissions seeded.');

@@ -6,11 +6,12 @@ import axios from 'axios';
 
 const payments = ref([]);
 const loading = ref(true);
+const loadError = ref('');
 const selectedPayment = ref(null);
 const proofUrl = ref('');
 const reviewing = ref(false);
 const rejectionReason = ref('');
-const filters = ref({ status: 'pending', search: '' });
+const filters = ref({ status: '', search: '' });
 const perPage = ref(10);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0 });
 
@@ -20,6 +21,7 @@ watch([filters, perPage], () => { pagination.value.current_page = 1; load(1); },
 
 async function load(page = 1) {
     loading.value = true;
+    loadError.value = '';
     try {
         const res = await axios.get('/api/admin/manual-payments', {
             params: {
@@ -33,6 +35,9 @@ async function load(page = 1) {
         pagination.value.current_page = res.data.current_page;
         pagination.value.last_page = res.data.last_page;
         pagination.value.total = res.data.total;
+    } catch (e) {
+        loadError.value = e.response?.data?.message ?? e.response?.statusText ?? 'Failed to load payments.';
+        console.error('Manual payments load error:', e.response?.status, e.response?.data);
     } finally {
         loading.value = false;
     }
@@ -77,10 +82,10 @@ const statusBadge = (s) => ({
 </script>
 
 <template>
-    <Head title="Manual Payments" />
+    <Head title="Payments" />
     <AppLayout>
         <div class="page-header">
-            <h1 class="page-title">Manual Payment Review</h1>
+            <h1 class="page-title">Payments</h1>
         </div>
 
         <div>
@@ -239,6 +244,9 @@ const statusBadge = (s) => ({
                         <CSpinner color="primary" />
                         <p class="mt-2 mb-0">Loading…</p>
                     </div>
+                    <CAlert v-else-if="loadError" color="danger" class="m-3">
+                        <strong>Error loading payments:</strong> {{ loadError }}
+                    </CAlert>
                     <div v-else class="table-responsive">
                         <CTable striped hover class="mb-0">
                             <CTableHead>

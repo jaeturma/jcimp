@@ -124,7 +124,7 @@
     </div>
 
     <div class="footer">
-        &copy; {{ date('Y') }} Concert Ticketing. All rights reserved.<br>
+        &copy; {{ date('Y') }} JJ Networks NDS. All rights reserved.<br>
         This is an automated email — please do not reply.
     </div>
 

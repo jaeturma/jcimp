@@ -19,7 +19,9 @@ class StudentVerificationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $this->authorize('verify students');
+        if (!auth()->user()->hasRole('super_admin')) {
+            $this->authorize('verify students');
+        }
 
         $query = StudentVerification::with(['user:id,name,email', 'reviewer:id,name'])
             ->latest();
@@ -53,7 +55,9 @@ class StudentVerificationController extends Controller
      */
     public function show(StudentVerification $studentVerification): JsonResponse
     {
-        $this->authorize('verify students');
+        if (!auth()->user()->hasRole('super_admin')) {
+            $this->authorize('verify students');
+        }
         $studentVerification->load(['user:id,name,email', 'reviewer:id,name']);
 
         return response()->json([
@@ -69,7 +73,9 @@ class StudentVerificationController extends Controller
      */
     public function review(Request $request, StudentVerification $studentVerification): JsonResponse
     {
-        $this->authorize('verify students');
+        if (!auth()->user()->hasRole('super_admin')) {
+            $this->authorize('verify students');
+        }
 
         $request->validate([
             'action' => 'required|in:approve,reject',
@@ -117,7 +123,7 @@ class StudentVerificationController extends Controller
             'rejection_reason' => $v->rejection_reason,
             'reviewer_name'    => $v->reviewer?->name,
             'reviewed_at'      => $v->reviewed_at?->toISOString(),
-            'created_at'       => $v->created_at->toISOString(),
+            'created_at'       => $v->created_at?->toISOString(),
         ];
     }
 }

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import axios from 'axios';
 
@@ -11,6 +11,7 @@ const coverFile = ref(null);
 const coverMsg = ref('');
 const selectedEventId = ref(null);
 const loading = ref(true);
+const loadError = ref('');
 const showForm = ref(false);
 const saving = ref(false);
 const formError = ref('');
@@ -29,6 +30,11 @@ const qrErr        = ref('');
 const filters = ref({ search: '', event_id: '', status: '' });
 const perPage = ref(10);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0 });
+
+const page = usePage();
+const isAdminOrManager = computed(() => !!(page.props.auth?.isAdmin || page.props.auth?.isManager));
+const canCreateDeleteTickets = computed(() => !!page.props.auth?.isAdmin);
+const canUpdateTickets = computed(() => !!(page.props.auth?.isAdmin || page.props.auth?.isManager));
 
 const blankForm = () => ({
     event_id: 1,
@@ -91,6 +97,7 @@ async function uploadCover() {
 
 async function load(page = 1) {
     loading.value = true;
+    loadError.value = '';
     try {
         const res = await axios.get('/api/admin/tickets', {
             params: {
@@ -104,12 +111,19 @@ async function load(page = 1) {
         pagination.value.current_page = res.data.current_page;
         pagination.value.last_page = res.data.last_page;
         pagination.value.total = res.data.total;
+    } catch (e) {
+        loadError.value = e.response?.data?.message ?? 'Error loading ticket tiers.';
     } finally {
         loading.value = false;
     }
 }
 
 function openCreate() {
+    if (!canCreateDeleteTickets.value) {
+        formError.value = 'You do not have permission to create ticket tiers.';
+        return;
+    }
+
     form.value = blankForm();
     editingId.value = null;
     showForm.value = true;
@@ -117,6 +131,11 @@ function openCreate() {
 }
 
 function openEdit(ticket) {
+    if (!canUpdateTickets.value) {
+        formError.value = 'You do not have permission to edit ticket tiers.';
+        return;
+    }
+
     form.value = { ...ticket };
     editingId.value = ticket.id;
     showForm.value = true;
@@ -130,6 +149,9 @@ async function save() {
         if (editingId.value) {
             await axios.put(`/api/admin/tickets/${editingId.value}`, form.value);
         } else {
+            if (!canCreateDeleteTickets.value) {
+                throw new Error('You do not have permission to create ticket tiers.');
+            }
             await axios.post('/api/admin/tickets', form.value);
         }
         showForm.value = false;
@@ -145,6 +167,10 @@ async function save() {
 }
 
 async function remove(ticket) {
+    if (!canCreateDeleteTickets.value) {
+        alert('You do not have permission to delete ticket tiers.');
+        return;
+    }
     if (!confirm(`Delete "${ticket.name}"?`)) return;
     try {
         await axios.delete(`/api/admin/tickets/${ticket.id}`);
@@ -336,9 +362,10 @@ async function removeQr() {
         <div class="page-header">
             <h1 class="page-title">Ticket Tiers</h1>
             <div class="page-actions">
-                <CButton color="primary" @click="openCreate">
+                <CButton v-if="canCreateDeleteTickets" color="primary" @click="openCreate">
                     <CIcon icon="cil-plus" class="me-1" /> Add Tier
                 </CButton>
+                <span v-else class="text-muted small">Managers can view and edit ticket tiers (no create/delete rights).</span>
             </div>
         </div>
 
@@ -410,6 +437,8 @@ async function removeQr() {
                     <span class="ms-2">Loading ticket tiers…</span>
                 </div>
 
+                <CAlert v-else-if="loadError" color="danger" class="m-3">{{ loadError }}</CAlert>
+
                 <div v-else class="table-responsive">
                     <CTable hover class="mb-0 align-middle">
                         <CTableHead class="table-light">
@@ -451,10 +480,10 @@ async function removeQr() {
                                         <CButton color="info" variant="outline" size="sm" @click="openQrModal(t)">
                                             GCash QR
                                         </CButton>
-                                        <CButton color="secondary" variant="outline" size="sm" @click="openEdit(t)">
+                                        <CButton v-if="canUpdateTickets" color="secondary" variant="outline" size="sm" @click="openEdit(t)">
                                             Edit
                                         </CButton>
-                                        <CButton color="danger" variant="ghost" size="sm" @click="remove(t)">
+                                        <CButton v-if="canCreateDeleteTickets" color="danger" variant="ghost" size="sm" @click="remove(t)">
                                             Del
                                         </CButton>
                                     </div>

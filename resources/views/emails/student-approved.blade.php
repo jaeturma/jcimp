@@ -23,7 +23,7 @@
         <a href="{{ url('/tickets') }}" class="cta">Buy My Ticket Now</a>
         <p style="font-size:13px;color:#888;">This approval is valid for 24 hours from the time of approval.</p>
     </div>
-    <div class="footer">&copy; {{ date('Y') }} Concert Ticketing. All rights reserved.</div>
+    <div class="footer">&copy; {{ date('Y') }} JJ Networks NDS. All rights reserved.</div>
 </div>
 </body>
 </html>

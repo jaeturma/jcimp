@@ -90,7 +90,7 @@
         @endif
     </div>
     <div class="footer">
-        &copy; {{ date('Y') }} Concert Ticketing. All rights reserved.
+        &copy; {{ date('Y') }} JJ Networks NDS. All rights reserved.
     </div>
 </div>
 </body>

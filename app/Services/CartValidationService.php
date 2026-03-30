@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\Reservation;
+use App\Models\StudentVerification;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use RuntimeException;
@@ -67,8 +68,14 @@ class CartValidationService
             );
         }
 
-        // Rule 2: User must have verified student status
-        if (! $user || ! $user->canBuyStudentTicket()) {
+        // Rule 2: Must have verified student status (logged-in user or approved guest)
+        $isVerified = $user
+            ? $user->canBuyStudentTicket()
+            : StudentVerification::where('guest_email', $email)
+                ->where('status', 'approved')
+                ->exists();
+
+        if (! $isVerified) {
             throw new RuntimeException(
                 'Student tickets require verified student status. '
                 . 'Please complete student verification before purchasing.'

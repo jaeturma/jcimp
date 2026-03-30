@@ -17,6 +17,9 @@ use App\Http\Controllers\Admin\ScannerController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StudentVerificationController as AdminStudentVerificationController;
 use App\Http\Controllers\Admin\TicketController as AdminTicketController;
+use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\Admin\RoleManagementController;
+use App\Http\Controllers\Admin\PermissionManagementController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -96,44 +99,109 @@ Route::post('/webhooks/payment', [WebhookController::class, 'handle'])
 
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
 
-    // ── Dashboard (permission: view dashboard) ────────────────────────────
-    Route::get('/dashboard', [DashboardController::class, 'index']);
+    // ── Dashboard
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->middleware('permission:view dashboard');
 
-    // ── Event Management (CRUD + cover image upload) ─────────────────────
-    Route::get('/events',                    [AdminEventController::class, 'index']);
-    Route::post('/events',                   [AdminEventController::class, 'store']);
-    Route::get('/events/{event}',            [AdminEventController::class, 'show']);
-    Route::put('/events/{event}',            [AdminEventController::class, 'update']);
-    Route::delete('/events/{event}',         [AdminEventController::class, 'destroy']);
-    Route::post('/events/{event}/cover',     [AdminEventController::class, 'uploadCover']);
+    // ── Event Management (CRUD + cover image upload)
+    Route::get('/events',                [AdminEventController::class, 'index'])
+        ->middleware('permission:view events');
+    Route::post('/events',               [AdminEventController::class, 'store'])
+        ->middleware('permission:create events');
+    Route::get('/events/{event}',        [AdminEventController::class, 'show'])
+        ->middleware('permission:view events');
+    Route::put('/events/{event}',        [AdminEventController::class, 'update'])
+        ->middleware('permission:update events');
+    Route::delete('/events/{event}',     [AdminEventController::class, 'destroy'])
+        ->middleware('permission:delete events');
+    Route::post('/events/{event}/cover', [AdminEventController::class, 'uploadCover'])
+        ->middleware('permission:update events');
 
-    // ── Ticket Management (permission: manage tickets) ────────────────────
-    Route::get('/tickets',                    [AdminTicketController::class, 'index']);
-    Route::post('/tickets',                   [AdminTicketController::class, 'store']);
-    Route::put('/tickets/{ticket}',           [AdminTicketController::class, 'update']);
-    Route::delete('/tickets/{ticket}',        [AdminTicketController::class, 'destroy']);
-    Route::get('/tickets/stats',              [AdminTicketController::class, 'stats']);
-    Route::post('/tickets/{ticket}/qr',       [AdminTicketController::class, 'uploadQr']);
-    Route::delete('/tickets/{ticket}/qr',     [AdminTicketController::class, 'removeQr']);
+    // ── Ticket Management
+    Route::get('/tickets',              [AdminTicketController::class, 'index'])
+        ->middleware('permission:view tickets');
+    Route::post('/tickets',             [AdminTicketController::class, 'store'])
+        ->middleware('permission:create tickets');
+    Route::put('/tickets/{ticket}',     [AdminTicketController::class, 'update'])
+        ->middleware('permission:update tickets');
+    Route::delete('/tickets/{ticket}',  [AdminTicketController::class, 'destroy'])
+        ->middleware('permission:delete tickets');
+    Route::get('/tickets/stats',        [AdminTicketController::class, 'stats'])
+        ->middleware('permission:view tickets');
+    Route::post('/tickets/{ticket}/qr', [AdminTicketController::class, 'uploadQr'])
+        ->middleware('permission:update tickets');
+    Route::delete('/tickets/{ticket}/qr', [AdminTicketController::class, 'removeQr'])
+        ->middleware('permission:update tickets');
 
-    // ── Order Management (permission: manage orders) ──────────────────────
-    Route::get('/orders',         [AdminOrderController::class, 'index']);
-    Route::get('/orders/{order}', [AdminOrderController::class, 'show']);
+    // ── Order Management
+    Route::get('/orders',                          [AdminOrderController::class, 'index'])
+        ->middleware('permission:view orders');
+    Route::post('/orders',                         [AdminOrderController::class, 'store'])
+        ->middleware('permission:create orders');
+    Route::post('/orders/direct-issue',            [AdminOrderController::class, 'directIssue'])
+        ->middleware('permission:create orders');
+    Route::get('/orders/{order}',                  [AdminOrderController::class, 'show'])
+        ->middleware('permission:view orders');
+    Route::put('/orders/{order}',                  [AdminOrderController::class, 'update'])
+        ->middleware('permission:update orders');
+    Route::delete('/orders/{order}',               [AdminOrderController::class, 'destroy'])
+        ->middleware('permission:delete orders');
+    Route::post('/orders/{order}/send-tickets',    [AdminOrderController::class, 'sendTickets'])
+        ->middleware('permission:update orders');
 
-    // ── Manual Payment Review (permission: review manual payments) ────────
-    Route::get('/manual-payments',                          [ManualPaymentController::class, 'index']);
-    Route::get('/manual-payments/{manualPayment}',          [ManualPaymentController::class, 'show']);
-    Route::post('/manual-payments/{manualPayment}/review',  [ManualPaymentController::class, 'review']);
+    // ── Manual Payment Review
+    Route::get('/manual-payments',                         [ManualPaymentController::class, 'index'])
+        ->middleware('permission:review manual payments');
+    Route::get('/manual-payments/{manualPayment}',         [ManualPaymentController::class, 'show'])
+        ->middleware('permission:review manual payments');
+    Route::post('/manual-payments/{manualPayment}/review', [ManualPaymentController::class, 'review'])
+        ->middleware('permission:review manual payments');
 
-    // ── Student Verification (permission: verify students) ────────────────
-    Route::get('/student-verifications',                                    [AdminStudentVerificationController::class, 'index']);
-    Route::get('/student-verifications/{studentVerification}',              [AdminStudentVerificationController::class, 'show']);
-    Route::post('/student-verifications/{studentVerification}/review',      [AdminStudentVerificationController::class, 'review']);
+    // ── Student Verification
+    Route::get('/student-verifications',                                       [AdminStudentVerificationController::class, 'index'])
+        ->middleware('permission:verify students');
+    Route::get('/student-verifications/{studentVerification}',                [AdminStudentVerificationController::class, 'show'])
+        ->middleware('permission:verify students');
+    Route::post('/student-verifications/{studentVerification}/review',        [AdminStudentVerificationController::class, 'review'])
+        ->middleware('permission:verify students');
 
     // ── System Settings
-    Route::post('/settings/recaptcha',   [SettingsController::class, 'updateRecaptcha']);
-    Route::post('/settings/smtp',        [SettingsController::class, 'updateSmtp']);
-    Route::post('/settings/test-email',  [SettingsController::class, 'testEmail']);
+    Route::post('/settings/recaptcha',   [SettingsController::class, 'updateRecaptcha'])
+        ->middleware('permission:manage settings');
+    Route::post('/settings/smtp',        [SettingsController::class, 'updateSmtp'])
+        ->middleware('permission:manage settings');
+    Route::post('/settings/test-email',  [SettingsController::class, 'testEmail'])
+        ->middleware('permission:manage settings');
+
+    // ── User Management
+    Route::get('/users',         [UserManagementController::class, 'index'])
+        ->middleware('permission:view users');
+    Route::post('/users',        [UserManagementController::class, 'store'])
+        ->middleware('permission:create users');
+    Route::get('/users/{user}',  [UserManagementController::class, 'show'])
+        ->middleware('permission:view users');
+    Route::put('/users/{user}',  [UserManagementController::class, 'update'])
+        ->middleware('permission:update users');
+    Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])
+        ->middleware('permission:delete users');
+
+    // ── Role Management
+    Route::get('/roles',         [RoleManagementController::class, 'index'])
+        ->middleware('permission:view roles');
+    Route::post('/roles',        [RoleManagementController::class, 'store'])
+        ->middleware('permission:create roles');
+    Route::get('/roles/{role}',  [RoleManagementController::class, 'show'])
+        ->middleware('permission:view roles');
+    Route::put('/roles/{role}',  [RoleManagementController::class, 'update'])
+        ->middleware('permission:update roles');
+    Route::delete('/roles/{role}', [RoleManagementController::class, 'destroy'])
+        ->middleware('permission:delete roles');
+
+    // ── Permission Management
+    Route::get('/permissions', [PermissionManagementController::class, 'index'])
+        ->middleware('permission:view permissions');
+    Route::post('/permissions/assign', [PermissionManagementController::class, 'assign'])
+        ->middleware('permission:assign permissions');
 });
 
 /*
@@ -143,6 +211,8 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 */
 
 Route::middleware(['auth:sanctum', 'staff'])->prefix('admin')->group(function () {
-    Route::post('/scan',   [ScannerController::class, 'scan']);
-    Route::get('/scan/stats', [ScannerController::class, 'stats']);
+    Route::post('/scan',   [ScannerController::class, 'scan'])
+        ->middleware('permission:scan tickets');
+    Route::get('/scan/stats', [ScannerController::class, 'stats'])
+        ->middleware('permission:scan tickets');
 });

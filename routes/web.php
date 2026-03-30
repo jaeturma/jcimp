@@ -39,9 +39,11 @@ Route::get('/', function () {
 Route::get('/dashboard', function () {
     $user = auth()->user();
     return Inertia::render('Dashboard', [
-        'isAdmin'   => $user?->isAdminOrAbove() ?? false,
-        'isStaff'   => $user?->isStaff()        ?? false,
-        'userRole'  => $user?->getRoleNames()->first() ?? 'guest',
+        'isAdmin'     => $user?->isAdminOrAbove() ?? false,
+        'isManager'   => $user?->isManager()      ?? false,
+        'isValidator' => $user?->isValidator()    ?? false,
+        'isStaff'     => $user?->isStaff()        ?? false,
+        'userRole'    => $user?->getRoleNames()->first() ?? 'guest',
     ]);
 })->middleware(['auth', 'verified'])->name('dashboard');
 
@@ -159,6 +161,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     })->name('admin.settings');
     Route::get('/orders',        fn () => Inertia::render('Admin/Orders'))->name('admin.orders');
     Route::get('/verifications', fn () => Inertia::render('Admin/Verifications'))->name('admin.verifications');
+    Route::get('/users',         fn () => Inertia::render('Admin/Users'))->name('admin.users');
+    Route::get('/roles',         fn () => Inertia::render('Admin/Roles'))->name('admin.roles');
+    Route::get('/permissions',   fn () => Inertia::render('Admin/Permissions'))->name('admin.permissions');
 });
 
 /*

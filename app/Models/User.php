@@ -91,9 +91,24 @@ class User extends Authenticatable
         return $this->hasAnyRole(['super_admin', 'admin']);
     }
 
+    public function isManager(): bool
+    {
+        return $this->hasRole('manager');
+    }
+
+    public function isValidator(): bool
+    {
+        return $this->hasRole('validator');
+    }
+
     public function isStaff(): bool
     {
         return $this->hasRole('staff');
+    }
+
+    public function hasOperatorAccess(): bool
+    {
+        return $this->hasAnyRole(['super_admin', 'admin', 'manager', 'validator', 'staff']);
     }
 
     // ── Scopes ────────────────────────────────────────────────────────────────

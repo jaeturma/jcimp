@@ -20,7 +20,8 @@
       "Bash(node -e \"const icons = require\\(''@coreui/icons''\\); console.log\\(Object.keys\\(icons\\).filter\\(k => k.toLowerCase\\(\\).includes\\(''calendar''\\) || k.toLowerCase\\(\\).includes\\(''transfer''\\) || k.toLowerCase\\(\\).includes\\(''swap''\\) || k.toLowerCase\\(\\).includes\\(''tag''\\)\\).join\\(''\\\\n''\\)\\)\")",
       "Bash(node -e \"const icons = require\\(''@coreui/icons''\\); console.log\\(Object.keys\\(icons\\).filter\\(k => k.toLowerCase\\(\\).includes\\(''setting''\\) || k.toLowerCase\\(\\).includes\\(''cog''\\) || k.toLowerCase\\(\\).includes\\(''wrench''\\) || k.toLowerCase\\(\\).includes\\(''sliders''\\)\\).join\\(''\\\\n''\\)\\)\")",
       "Bash(node -e \"const icons = require\\(''./node_modules/@coreui/icons/js/brands.js''\\); const free = require\\(''./node_modules/@coreui/icons/js/free.js''\\); const keys = Object.keys\\({...icons,...free}\\); console.log\\(keys.filter\\(k => k.toLowerCase\\(\\).includes\\(''envelope''\\) || k.toLowerCase\\(\\).includes\\(''send''\\)\\)\\)\")",
-      "Bash(node -e \"const icons = require\\(''d:/lara/www/ticket/node_modules/@coreui/icons''\\); const keys = Object.keys\\(icons\\); console.log\\(keys.filter\\(k => /envelope|send/i.test\\(k\\)\\)\\)\")"
+      "Bash(node -e \"const icons = require\\(''d:/lara/www/ticket/node_modules/@coreui/icons''\\); const keys = Object.keys\\(icons\\); console.log\\(keys.filter\\(k => /envelope|send/i.test\\(k\\)\\)\\)\")",
+      "Bash(find d:/lara/www/ticket/vendor -name cors.php -path */config/*)"
     ]
   }
 }

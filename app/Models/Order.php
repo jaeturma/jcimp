@@ -90,7 +90,7 @@ class Order extends Model
         $attempts = 0;
 
         do {
-            $reference = strtoupper('TKT-' . now()->format('Ymd') . '-' . str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT));
+            $reference = strtoupper('TK-' . now()->format('ymd') . '-' . str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT));
             $exists    = static::where('reference', $reference)->exists();
             $attempts++;
         } while ($exists && $attempts < 10);

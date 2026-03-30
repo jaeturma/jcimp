@@ -3,9 +3,11 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 
 defineProps({
-    isAdmin:  Boolean,
-    isStaff:  Boolean,
-    userRole: String,
+    isAdmin:     Boolean,
+    isManager:   Boolean,
+    isValidator: Boolean,
+    isStaff:     Boolean,
+    userRole:    String,
 });
 </script>
 
@@ -39,7 +41,7 @@ defineProps({
             </CCol>
 
             <!-- Admin Dashboard -->
-            <CCol v-if="isAdmin" :sm="6" :xl="4">
+            <CCol v-if="isAdmin || isManager" :sm="6" :xl="4">
                 <Link :href="route('admin.dashboard')" class="text-decoration-none">
                     <CCard class="h-100 border-secondary border-2 dashboard-card">
                         <CCardBody class="p-4">
@@ -52,7 +54,7 @@ defineProps({
             </CCol>
 
             <!-- Ticket Tiers -->
-            <CCol v-if="isAdmin" :sm="6" :xl="4">
+            <CCol v-if="isAdmin || isManager" :sm="6" :xl="4">
                 <Link :href="route('admin.tickets')" class="text-decoration-none">
                     <CCard class="h-100 border-warning border-2 dashboard-card">
                         <CCardBody class="p-4">
@@ -65,7 +67,7 @@ defineProps({
             </CCol>
 
             <!-- Orders -->
-            <CCol v-if="isAdmin" :sm="6" :xl="4">
+            <CCol v-if="isAdmin || isManager || isValidator || isStaff" :sm="6" :xl="4">
                 <Link :href="route('admin.orders')" class="text-decoration-none">
                     <CCard class="h-100 border-info border-2 dashboard-card">
                         <CCardBody class="p-4">
@@ -78,7 +80,7 @@ defineProps({
             </CCol>
 
             <!-- Student Verification -->
-            <CCol v-if="isAdmin" :sm="6" :xl="4">
+            <CCol v-if="isAdmin || isManager || isValidator || isStaff" :sm="6" :xl="4">
                 <Link :href="route('admin.verifications')" class="text-decoration-none">
                     <CCard class="h-100 border-success border-2 dashboard-card">
                         <CCardBody class="p-4">
@@ -91,7 +93,7 @@ defineProps({
             </CCol>
 
             <!-- Payment Review -->
-            <CCol v-if="isAdmin" :sm="6" :xl="4">
+            <CCol v-if="isAdmin || isManager" :sm="6" :xl="4">
                 <Link :href="route('admin.payments')" class="text-decoration-none">
                     <CCard class="h-100 border-danger border-2 dashboard-card">
                         <CCardBody class="p-4">
@@ -104,7 +106,7 @@ defineProps({
             </CCol>
 
             <!-- Ticket Scanner -->
-            <CCol v-if="isAdmin || isStaff" :sm="6" :xl="4">
+            <CCol v-if="isAdmin || isManager || isValidator || isStaff" :sm="6" :xl="4">
                 <Link :href="route('admin.scanner')" class="text-decoration-none">
                     <CCard class="h-100 border-dark border-2 dashboard-card">
                         <CCardBody class="p-4">

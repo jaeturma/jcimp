@@ -12,12 +12,6 @@ use RuntimeException;
 
 class SettingsController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('auth');
-        $this->middleware('admin');
-    }
-
     public function updateRecaptcha(Request $request)
     {
         $validator = Validator::make($request->all(), [
