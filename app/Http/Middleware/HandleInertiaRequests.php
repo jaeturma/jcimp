@@ -49,7 +49,9 @@ class HandleInertiaRequests extends Middleware
                 'hasOperatorAccess' => $user?->hasOperatorAccess() ?? false,
                 'userRole'   => $user?->getRoleNames()->first() ?? 'guest',
             ],
-            'recaptchaSiteKey' => config('services.recaptcha.site_key'),
+            'recaptchaSiteKey'     => config('services.recaptcha.site_key'),
+            'recaptchaEnabled'    => (bool) config('services.recaptcha.enabled', false),
+            'mailEnabled'         => env('MAIL_ENABLED', false) === 'true' || env('MAIL_ENABLED', false) === true,
         ];
     }
 }

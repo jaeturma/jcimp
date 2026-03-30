@@ -148,7 +148,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('/settings', function () {
         return Inertia::render('Admin/Settings', [
             'smtpSettings' => [
-                'mailer'       => config('mail.default', 'log'),
+                'enabled'      => env('MAIL_ENABLED', false),
                 'host'         => config('mail.mailers.smtp.host', ''),
                 'port'         => config('mail.mailers.smtp.port', 587),
                 'username'     => config('mail.mailers.smtp.username', ''),
@@ -156,6 +156,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
                 'from_address' => config('mail.from.address', ''),
                 'from_name'    => config('mail.from.name', ''),
                 // password intentionally omitted
+            ],
+            'recaptchaSettings' => [
+                'enabled'  => env('RECAPTCHA_ENABLED', false),
+                'site_key' => config('services.recaptcha.site_key', ''),
             ],
         ]);
     })->name('admin.settings');

@@ -16,7 +16,7 @@ class TicketIssuedMail extends Mailable
     public function __construct(public readonly Order $order)
     {
         // Ensure all needed relations are loaded
-        $this->order->loadMissing(['items.ticket.event', 'issuedTickets.ticket']);
+        $this->order->loadMissing(['items.ticket.event', 'issuedTickets.ticket.event']);
     }
 
     public function envelope(): Envelope
