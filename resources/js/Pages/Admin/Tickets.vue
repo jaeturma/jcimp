@@ -27,6 +27,16 @@ const qrRemoving   = ref(false);
 const qrMsg        = ref('');
 const qrErr        = ref('');
 
+// Ticket Image modal state
+const imgModal     = ref(false);
+const imgTicket    = ref(null);
+const imgFile      = ref(null);
+const imgPreview   = ref(null);
+const imgUploading = ref(false);
+const imgRemoving  = ref(false);
+const imgMsg       = ref('');
+const imgErr       = ref('');
+
 const filters = ref({ search: '', event_id: '', status: '' });
 const perPage = ref(10);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0 });
@@ -240,6 +250,67 @@ async function removeQr() {
         qrRemoving.value = false;
     }
 }
+
+// ── Ticket Image handlers ─────────────────────────────────────────────────────
+function openImgModal(ticket) {
+    imgTicket.value  = ticket;
+    imgFile.value    = null;
+    imgPreview.value = ticket.ticket_image_url ?? null;
+    imgMsg.value     = '';
+    imgErr.value     = '';
+    imgModal.value   = true;
+}
+
+function onImgFileChange(e) {
+    const file = e.target.files[0];
+    if (!file) { imgFile.value = null; return; }
+    imgFile.value = file;
+    const reader = new FileReader();
+    reader.onload = (ev) => { imgPreview.value = ev.target.result; };
+    reader.readAsDataURL(file);
+}
+
+async function uploadImg() {
+    if (!imgFile.value) return;
+    imgUploading.value = true;
+    imgMsg.value = '';
+    imgErr.value = '';
+    const fd = new FormData();
+    fd.append('ticket_image', imgFile.value);
+    try {
+        const res = await axios.post(`/api/admin/tickets/${imgTicket.value.id}/image`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        imgMsg.value = res.data.message;
+        const idx = tickets.value.findIndex(t => t.id === imgTicket.value.id);
+        if (idx !== -1) tickets.value[idx].ticket_image_url = res.data.ticket_image_url;
+        imgTicket.value.ticket_image_url = res.data.ticket_image_url;
+        imgFile.value = null;
+    } catch (e) {
+        imgErr.value = e.response?.data?.message ?? 'Upload failed.';
+    } finally {
+        imgUploading.value = false;
+    }
+}
+
+async function removeImg() {
+    if (!confirm(`Remove the ticket image for "${imgTicket.value?.name}"?`)) return;
+    imgRemoving.value = true;
+    imgMsg.value = '';
+    imgErr.value = '';
+    try {
+        await axios.delete(`/api/admin/tickets/${imgTicket.value.id}/image`);
+        imgMsg.value = 'Ticket image removed.';
+        imgPreview.value = null;
+        const idx = tickets.value.findIndex(t => t.id === imgTicket.value.id);
+        if (idx !== -1) tickets.value[idx].ticket_image_url = null;
+        imgTicket.value.ticket_image_url = null;
+    } catch (e) {
+        imgErr.value = e.response?.data?.message ?? 'Remove failed.';
+    } finally {
+        imgRemoving.value = false;
+    }
+}
 </script>
 
 <template>
@@ -299,6 +370,57 @@ async function removeQr() {
                 <CButton color="primary" :disabled="qrUploading || !qrFile" @click="uploadQr">
                     <CSpinner v-if="qrUploading" size="sm" class="me-1" />
                     {{ qrUploading ? 'Uploading…' : 'Save QR Code' }}
+                </CButton>
+            </CModalFooter>
+        </CModal>
+
+        <!-- Ticket Image Modal -->
+        <CModal :visible="imgModal" @hide="imgModal = false" alignment="center" size="md">
+            <CModalHeader>
+                <CModalTitle>Ticket Image — {{ imgTicket?.name }}</CModalTitle>
+            </CModalHeader>
+            <CModalBody>
+                <CAlert v-if="imgErr" color="danger" class="py-2 mb-3">{{ imgErr }}</CAlert>
+                <CAlert v-if="imgMsg" color="success" class="py-2 mb-3">{{ imgMsg }}</CAlert>
+
+                <!-- Current image preview -->
+                <div class="text-center mb-4">
+                    <div v-if="imgPreview" class="d-inline-block position-relative">
+                        <img :src="imgPreview" alt="Ticket Image"
+                            class="border border-2 rounded"
+                            style="max-width:100%;max-height:220px;object-fit:contain" />
+                        <div class="mt-2">
+                            <CButton size="sm" color="danger" variant="outline" :disabled="imgRemoving" @click="removeImg">
+                                <CSpinner v-if="imgRemoving" size="sm" class="me-1" />
+                                Remove Image
+                            </CButton>
+                        </div>
+                    </div>
+                    <div v-else class="border rounded d-flex align-items-center justify-content-center bg-light text-muted"
+                        style="height:160px;font-size:.85rem;width:100%">
+                        No image uploaded
+                    </div>
+                </div>
+
+                <hr class="my-3" />
+
+                <CFormLabel class="fw-semibold">Upload / Replace Ticket Image</CFormLabel>
+                <CFormInput
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    class="mb-2"
+                    @change="onImgFileChange"
+                />
+                <div class="form-text mb-1">
+                    This image will appear as the banner on the generated ticket in confirmation emails.
+                    Recommended: landscape, at least 600×200 px (JPG, PNG, WebP — max 4 MB).
+                </div>
+            </CModalBody>
+            <CModalFooter>
+                <CButton color="secondary" variant="outline" @click="imgModal = false">Close</CButton>
+                <CButton color="primary" :disabled="imgUploading || !imgFile" @click="uploadImg">
+                    <CSpinner v-if="imgUploading" size="sm" class="me-1" />
+                    {{ imgUploading ? 'Uploading…' : 'Save Image' }}
                 </CButton>
             </CModalFooter>
         </CModal>
@@ -450,8 +572,9 @@ async function removeQr() {
                                 <CTableHeaderCell class="fw-semibold text-center">Reserved</CTableHeaderCell>
                                 <CTableHeaderCell class="fw-semibold text-center">Available</CTableHeaderCell>
                                 <CTableHeaderCell class="fw-semibold">Revenue</CTableHeaderCell>
+                                <CTableHeaderCell class="fw-semibold text-center">Ticket Image</CTableHeaderCell>
                                 <CTableHeaderCell class="fw-semibold text-center">GCash QR</CTableHeaderCell>
-                                <CTableHeaderCell style="width:160px"></CTableHeaderCell>
+                                <CTableHeaderCell style="width:180px"></CTableHeaderCell>
                             </CTableRow>
                         </CTableHead>
                         <CTableBody>
@@ -472,11 +595,25 @@ async function removeQr() {
                                 <CTableDataCell class="text-center">{{ t.available }}</CTableDataCell>
                                 <CTableDataCell class="fw-semibold text-primary">₱{{ t.revenue }}</CTableDataCell>
                                 <CTableDataCell class="text-center">
+                                    <img
+                                        v-if="t.ticket_image_url"
+                                        :src="t.ticket_image_url"
+                                        alt="Ticket Image"
+                                        class="rounded border"
+                                        style="height:38px;width:68px;object-fit:cover;cursor:pointer"
+                                        @click="openImgModal(t)"
+                                    />
+                                    <CBadge v-else color="secondary" shape="rounded-pill">None</CBadge>
+                                </CTableDataCell>
+                                <CTableDataCell class="text-center">
                                     <CBadge v-if="t.gcash_qr_url" color="success" shape="rounded-pill">Set</CBadge>
                                     <CBadge v-else color="secondary" shape="rounded-pill">None</CBadge>
                                 </CTableDataCell>
                                 <CTableDataCell>
                                     <div class="d-flex gap-1 flex-wrap">
+                                        <CButton color="primary" variant="outline" size="sm" @click="openImgModal(t)">
+                                            Image
+                                        </CButton>
                                         <CButton color="info" variant="outline" size="sm" @click="openQrModal(t)">
                                             GCash QR
                                         </CButton>
@@ -490,7 +627,7 @@ async function removeQr() {
                                 </CTableDataCell>
                             </CTableRow>
                             <CTableRow v-if="!tickets.length">
-                                <CTableDataCell colspan="9" class="text-center text-muted py-5">
+                                <CTableDataCell colspan="10" class="text-center text-muted py-5">
                                     No ticket tiers yet. Click <strong>Add Tier</strong> to create one.
                                 </CTableDataCell>
                             </CTableRow>

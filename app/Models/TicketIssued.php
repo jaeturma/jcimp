@@ -14,6 +14,7 @@ class TicketIssued extends Model
         'order_id',
         'ticket_id',
         'qr_code',
+        'ticket_card_path',
         'status',
         'used_at',
         'holder_name',
@@ -23,6 +24,14 @@ class TicketIssued extends Model
         'resale_price',
         'transferred_to_user_id',
     ];
+
+    protected $appends = ['ticket_card_url'];
+
+    public function getTicketCardUrlAttribute(): ?string
+    {
+        if (! $this->ticket_card_path) return null;
+        return \Illuminate\Support\Facades\Storage::disk('public')->url($this->ticket_card_path);
+    }
 
     protected $casts = [
         'used_at'      => 'datetime',

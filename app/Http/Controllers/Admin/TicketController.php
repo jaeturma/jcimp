@@ -30,10 +30,11 @@ class TicketController extends Controller
 
         $tickets->transform(fn (Ticket $t) => [
             ...$t->toArray(),
-            'available'    => $t->availableQuantity(),
-            'revenue'      => number_format($t->sold_quantity * $t->price, 2),
-            'event_name'   => $t->event?->name,
-            'gcash_qr_url' => $t->gcash_qr ? Storage::disk('public')->url($t->gcash_qr) : null,
+            'available'        => $t->availableQuantity(),
+            'revenue'          => number_format($t->sold_quantity * $t->price, 2),
+            'event_name'       => $t->event?->name,
+            'gcash_qr_url'     => $t->gcash_qr     ? Storage::disk('public')->url($t->gcash_qr)     : null,
+            'ticket_image_url' => $t->ticket_image  ? Storage::disk('public')->url($t->ticket_image) : null,
         ]);
 
         return response()->json($tickets);
@@ -104,6 +105,39 @@ class TicketController extends Controller
         }
 
         return response()->json(['message' => 'GCash QR code removed.']);
+    }
+
+    /**
+     * Upload or replace the ticket tier banner image.
+     */
+    public function uploadTicketImage(Request $request, Ticket $ticket): JsonResponse
+    {
+        $request->validate(['ticket_image' => 'required|file|image|max:4096']);
+
+        if ($ticket->ticket_image) {
+            Storage::disk('public')->delete($ticket->ticket_image);
+        }
+
+        $path = $request->file('ticket_image')->store('ticket-images', 'public');
+        $ticket->update(['ticket_image' => $path]);
+
+        return response()->json([
+            'message'          => 'Ticket image updated.',
+            'ticket_image_url' => Storage::disk('public')->url($path),
+        ]);
+    }
+
+    /**
+     * Remove the ticket tier banner image.
+     */
+    public function removeTicketImage(Ticket $ticket): JsonResponse
+    {
+        if ($ticket->ticket_image) {
+            Storage::disk('public')->delete($ticket->ticket_image);
+            $ticket->update(['ticket_image' => null]);
+        }
+
+        return response()->json(['message' => 'Ticket image removed.']);
     }
 
     /**

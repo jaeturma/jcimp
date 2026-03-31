@@ -51,6 +51,63 @@ const directIssuing = ref(false);
 const availableTickets = ref([]);
 const ticketsLoading = ref(false);
 
+// ── Ticket Card Viewer ────────────────────────────────────────────────────────
+const showTicketCardModal  = ref(false);
+const ticketCardOrder      = ref(null);
+const ticketCardLoading    = ref(false);
+const ticketCardIndex      = ref(0);
+const regenerating         = ref(false);
+const regenMessage         = ref('');
+
+async function openTicketCards(order) {
+    ticketCardOrder.value  = null;
+    ticketCardIndex.value  = 0;
+    regenMessage.value     = '';
+    showTicketCardModal.value = true;
+    ticketCardLoading.value   = true;
+    try {
+        const res = await axios.get(`/api/admin/orders/${order.id}`);
+        ticketCardOrder.value = res.data.data;
+    } finally {
+        ticketCardLoading.value = false;
+    }
+}
+
+async function regenerateCards() {
+    if (!ticketCardOrder.value) return;
+    regenerating.value = true;
+    regenMessage.value = '';
+    try {
+        const res = await axios.post(`/api/admin/orders/${ticketCardOrder.value.id}/regenerate-cards`);
+        ticketCardOrder.value = res.data.order;
+        ticketCardIndex.value = 0;
+        regenMessage.value = res.data.message;
+    } catch (e) {
+        regenMessage.value = e.response?.data?.message ?? 'Regeneration failed.';
+    } finally {
+        regenerating.value = false;
+    }
+}
+
+async function regenerateFromDetail() {
+    if (!selected.value) return;
+    regenerating.value = true;
+    regenMessage.value = '';
+    try {
+        const res = await axios.post(`/api/admin/orders/${selected.value.id}/regenerate-cards`);
+        selected.value = res.data.order;
+        regenMessage.value = res.data.message;
+    } catch (e) {
+        regenMessage.value = e.response?.data?.message ?? 'Regeneration failed.';
+    } finally {
+        regenerating.value = false;
+    }
+}
+
+const ticketCards = computed(() =>
+    (ticketCardOrder.value?.tickets_issued ?? []).filter(t => t.ticket_card_url)
+);
+
 // ── Send Tickets ──────────────────────────────────────────────────────────────
 const showSendModal = ref(false);
 const sendEmail = ref('');
@@ -256,7 +313,7 @@ const methodColor = (m) => ({ qrph: 'primary', manual: 'secondary', cash: 'succe
             <!-- Order Detail Modal -->
             <CModal
                 :visible="!!(selected || detailLoading)"
-                @hide="selected = null; showSendModal = false"
+                @hide="selected = null; showSendModal = false; regenMessage = ''"
                 size="lg"
                 scrollable
             >
@@ -333,7 +390,55 @@ const methodColor = (m) => ({ qrph: 'primary', manual: 'secondary', cash: 'succe
 
                         <!-- Issued Tickets -->
                         <div v-if="selected.tickets_issued?.length">
-                            <h6 class="fw-semibold mb-2">Issued Tickets</h6>
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <h6 class="fw-semibold mb-0">Issued Tickets</h6>
+                                <CButton
+                                    v-if="canUpdateOrders"
+                                    color="warning"
+                                    variant="outline"
+                                    size="sm"
+                                    :disabled="regenerating"
+                                    @click="regenerateFromDetail"
+                                >
+                                    <CSpinner v-if="regenerating" size="sm" class="me-1" />
+                                    {{ regenerating ? 'Regenerating…' : '↺ Regenerate Cards' }}
+                                </CButton>
+                            </div>
+                            <CAlert v-if="regenMessage" color="success" class="py-2 mb-2">{{ regenMessage }}</CAlert>
+
+                            <!-- Ticket cards grid -->
+                            <div v-if="selected.tickets_issued.some(t => t.ticket_card_url)" class="row g-3 mb-3">
+                                <div
+                                    v-for="t in selected.tickets_issued.filter(t => t.ticket_card_url)"
+                                    :key="'card-' + t.id"
+                                    class="col-12 col-sm-6"
+                                >
+                                    <div class="position-relative border rounded overflow-hidden" style="background:#111">
+                                        <img
+                                            :src="t.ticket_card_url"
+                                            :alt="'Ticket ' + t.id"
+                                            class="w-100 d-block"
+                                            style="object-fit:cover; max-height:340px;"
+                                        />
+                                        <div class="position-absolute bottom-0 start-0 end-0 d-flex align-items-center justify-content-between px-2 py-1"
+                                             style="background:rgba(0,0,0,.55);">
+                                            <span class="font-monospace text-white" style="font-size:10px;">
+                                                {{ t.qr_code.slice(-12).toUpperCase() }}
+                                            </span>
+                                            <div class="d-flex gap-2 align-items-center">
+                                                <CBadge :color="t.status === 'valid' ? 'success' : 'secondary'" class="text-capitalize">
+                                                    {{ t.status }}
+                                                </CBadge>
+                                                <a :href="t.ticket_card_url" target="_blank" download class="btn btn-sm btn-light py-0 px-2" style="font-size:11px;">
+                                                    ↓
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Fallback list for tickets without card images -->
                             <div class="border rounded">
                                 <div
                                     v-for="t in selected.tickets_issued"
@@ -394,6 +499,159 @@ const methodColor = (m) => ({ qrph: 'primary', manual: 'secondary', cash: 'succe
                 </CModalBody>
                 <CModalFooter>
                     <CButton color="secondary" variant="outline" @click="selected = null; showSendModal = false">Close</CButton>
+                </CModalFooter>
+            </CModal>
+
+            <!-- Ticket Card Viewer Modal -->
+            <CModal
+                :visible="showTicketCardModal"
+                @hide="showTicketCardModal = false; ticketCardOrder = null; regenMessage = ''"
+                size="lg"
+                scrollable
+                alignment="center"
+            >
+                <CModalHeader>
+                    <CModalTitle>
+                        Ticket Cards
+                        <span v-if="ticketCardOrder" class="font-monospace text-primary fs-6 ms-2">
+                            {{ ticketCardOrder.reference }}
+                        </span>
+                    </CModalTitle>
+                </CModalHeader>
+                <CModalBody>
+                    <!-- Loading -->
+                    <div v-if="ticketCardLoading" class="py-5 text-center text-muted">
+                        <CSpinner color="info" />
+                        <p class="mt-2 mb-0">Loading ticket cards…</p>
+                    </div>
+
+                    <!-- No cards yet -->
+                    <div v-else-if="ticketCards.length === 0" class="py-4 text-center text-muted">
+                        <p class="mb-1 fs-5">No ticket cards available.</p>
+                        <p class="small mb-3">
+                            {{ ticketCardOrder?.tickets_issued?.length
+                                ? 'Cards could not be generated. Try regenerating below.'
+                                : 'No issued tickets found for this order.' }}
+                        </p>
+                        <CButton
+                            v-if="canUpdateOrders && ticketCardOrder?.tickets_issued?.length"
+                            color="primary"
+                            :disabled="regenerating"
+                            @click="regenerateCards"
+                        >
+                            <CSpinner v-if="regenerating" size="sm" class="me-1" />
+                            {{ regenerating ? 'Generating…' : '↺ Generate Ticket Cards' }}
+                        </CButton>
+                        <CAlert v-if="regenMessage" :color="regenMessage.includes('failed') ? 'danger' : 'success'" class="mt-3 mb-0 py-2 text-start">{{ regenMessage }}</CAlert>
+                    </div>
+
+                    <!-- Card viewer -->
+                    <template v-else>
+                        <!-- Current card display -->
+                        <div class="position-relative bg-black rounded overflow-hidden mb-3" style="min-height:300px;">
+                            <img
+                                :src="ticketCards[ticketCardIndex].ticket_card_url"
+                                :alt="'Ticket ' + (ticketCardIndex + 1)"
+                                class="d-block mx-auto"
+                                style="max-width:100%; max-height:70vh; object-fit:contain;"
+                            />
+
+                            <!-- Prev / Next arrows (only if multiple cards) -->
+                            <template v-if="ticketCards.length > 1">
+                                <button
+                                    class="btn btn-dark btn-sm position-absolute top-50 start-0 translate-middle-y ms-2 opacity-75"
+                                    :disabled="ticketCardIndex === 0"
+                                    @click="ticketCardIndex--"
+                                    style="z-index:10;"
+                                >‹</button>
+                                <button
+                                    class="btn btn-dark btn-sm position-absolute top-50 end-0 translate-middle-y me-2 opacity-75"
+                                    :disabled="ticketCardIndex === ticketCards.length - 1"
+                                    @click="ticketCardIndex++"
+                                    style="z-index:10;"
+                                >›</button>
+                            </template>
+
+                            <!-- Counter badge -->
+                            <div v-if="ticketCards.length > 1"
+                                 class="position-absolute top-0 end-0 m-2 badge bg-dark bg-opacity-75">
+                                {{ ticketCardIndex + 1 }} / {{ ticketCards.length }}
+                            </div>
+                        </div>
+
+                        <!-- Ticket info bar -->
+                        <div class="d-flex align-items-center justify-content-between mb-3 px-1">
+                            <div class="small text-muted">
+                                <span class="fw-semibold text-body">
+                                    {{ ticketCards[ticketCardIndex].ticket?.name ?? 'Ticket' }}
+                                </span>
+                                &nbsp;·&nbsp;
+                                <span class="font-monospace">
+                                    {{ ticketCards[ticketCardIndex].qr_code.slice(-12).toUpperCase() }}
+                                </span>
+                                &nbsp;·&nbsp;
+                                <CBadge :color="ticketCards[ticketCardIndex].status === 'valid' ? 'success' : 'secondary'"
+                                        class="text-capitalize">
+                                    {{ ticketCards[ticketCardIndex].status }}
+                                </CBadge>
+                            </div>
+                            <a
+                                :href="ticketCards[ticketCardIndex].ticket_card_url"
+                                :download="'ticket-' + ticketCards[ticketCardIndex].qr_code.slice(-12) + '.jpg'"
+                                target="_blank"
+                                class="btn btn-sm btn-outline-primary"
+                            >
+                                ↓ Download
+                            </a>
+                        </div>
+
+                        <!-- Thumbnail strip (multiple cards) -->
+                        <div v-if="ticketCards.length > 1" class="d-flex gap-2 overflow-auto pb-1">
+                            <div
+                                v-for="(t, i) in ticketCards"
+                                :key="t.id"
+                                class="flex-shrink-0 border rounded overflow-hidden cursor-pointer"
+                                :class="i === ticketCardIndex ? 'border-primary border-2' : 'border-secondary opacity-60'"
+                                style="width:72px; height:90px;"
+                                @click="ticketCardIndex = i"
+                            >
+                                <img :src="t.ticket_card_url" class="w-100 h-100" style="object-fit:cover;" />
+                            </div>
+                        </div>
+
+                        <!-- Download all + Regenerate -->
+                        <div class="mt-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div>
+                                <template v-if="ticketCards.length > 1" v-for="(t, i) in ticketCards" :key="'dl-' + t.id">
+                                    <a
+                                        :href="t.ticket_card_url"
+                                        :download="'ticket-' + t.qr_code.slice(-12) + '.jpg'"
+                                        target="_blank"
+                                        class="btn btn-sm btn-outline-secondary me-1 mb-1"
+                                    >
+                                        ↓ Ticket {{ i + 1 }}
+                                    </a>
+                                </template>
+                            </div>
+                            <CButton
+                                v-if="canUpdateOrders"
+                                color="warning"
+                                variant="outline"
+                                size="sm"
+                                :disabled="regenerating"
+                                @click="regenerateCards"
+                            >
+                                <CSpinner v-if="regenerating" size="sm" class="me-1" />
+                                {{ regenerating ? 'Regenerating…' : '↺ Regenerate Cards' }}
+                            </CButton>
+                        </div>
+                        <CAlert v-if="regenMessage" color="success" class="mt-2 mb-0 py-2">{{ regenMessage }}</CAlert>
+                    </template>
+                </CModalBody>
+                <CModalFooter>
+                    <CButton color="secondary" variant="outline" @click="showTicketCardModal = false; ticketCardOrder = null">
+                        Close
+                    </CButton>
                 </CModalFooter>
             </CModal>
 
@@ -509,28 +767,38 @@ const methodColor = (m) => ({ qrph: 'primary', manual: 'secondary', cash: 'succe
                                         {{ new Date(order.created_at).toLocaleDateString() }}
                                     </CTableDataCell>
                                     <CTableDataCell>
-                                        <CButton color="primary" size="sm" variant="outline" @click="viewOrder(order)" class="me-1">
-                                            View
-                                        </CButton>
-                                        <CButton
-                                            v-if="canUpdateOrders"
-                                            color="warning"
-                                            size="sm"
-                                            variant="outline"
-                                            @click="openEdit(order)"
-                                            class="me-1"
-                                        >
-                                            Edit
-                                        </CButton>
-                                        <CButton
-                                            v-if="canDeleteOrders"
-                                            color="danger"
-                                            size="sm"
-                                            variant="outline"
-                                            @click="deleteOrder(order)"
-                                        >
-                                            Delete
-                                        </CButton>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            <CButton color="primary" size="sm" variant="outline" @click="viewOrder(order)">
+                                                View
+                                            </CButton>
+                                            <CButton
+                                                v-if="order.status === 'paid'"
+                                                color="info"
+                                                size="sm"
+                                                variant="outline"
+                                                @click="openTicketCards(order)"
+                                            >
+                                                🎟 Tickets
+                                            </CButton>
+                                            <CButton
+                                                v-if="canUpdateOrders"
+                                                color="warning"
+                                                size="sm"
+                                                variant="outline"
+                                                @click="openEdit(order)"
+                                            >
+                                                Edit
+                                            </CButton>
+                                            <CButton
+                                                v-if="canDeleteOrders"
+                                                color="danger"
+                                                size="sm"
+                                                variant="outline"
+                                                @click="deleteOrder(order)"
+                                            >
+                                                Delete
+                                            </CButton>
+                                        </div>
                                     </CTableDataCell>
                                 </CTableRow>
                                 <CTableRow v-if="!orders.length">

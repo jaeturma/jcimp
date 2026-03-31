@@ -7,6 +7,7 @@ use App\Http\Resources\OrderResource;
 use App\Mail\TicketIssuedMail;
 use App\Models\Order;
 use App\Services\PaymentService;
+use App\Services\TicketCardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -80,7 +81,7 @@ class OrderController extends Controller
      * Update an order.
      * Permission: update orders
      */
-    public function update(Request $request, Order $order): OrderResource
+    public function update(Request $request, Order $order, TicketCardService $cardService): OrderResource
     {
         if (!auth()->user()->hasRole('super_admin')) {
             $this->authorize('update orders');
@@ -89,12 +90,35 @@ class OrderController extends Controller
         $validated = $request->validate([
             'email' => 'sometimes|email',
             'status' => ['sometimes', Rule::in(['pending', 'pending_verification', 'paid', 'failed'])],
-            'payment_method' => ['sometimes', Rule::in(['qrph', 'manual'])],
+            'payment_method' => ['sometimes', Rule::in(['qrph', 'manual', 'cash', 'gcash', 'paymaya', 'gotyme'])],
             'total_amount' => 'sometimes|numeric|min:0',
             'reference' => 'nullable|string',
         ]);
 
+        $becomingPaid = ($validated['status'] ?? null) === 'paid' && ! $order->isPaid();
+
         $order->update($validated);
+
+        if ($becomingPaid) {
+            $order->loadMissing(['items.ticket.event', 'issuedTickets.ticket.event']);
+
+            if ($order->issuedTickets->isNotEmpty()) {
+                // Already has tickets — just (re)generate cards
+                foreach ($order->issuedTickets as $issued) {
+                    try {
+                        $path = $cardService->generate($issued, $order);
+                        $issued->update(['ticket_card_path' => $path]);
+                    } catch (\Throwable $e) {
+                        logger()->warning("Card gen on update failed #{$issued->id}: " . $e->getMessage());
+                    }
+                }
+            } else {
+                // No tickets yet — run the full generation pipeline
+                \App\Jobs\GenerateTicketJob::dispatch($order->id);
+            }
+        }
+
+        $order->load(['items.ticket', 'manualPayment', 'issuedTickets.ticket']);
 
         return new OrderResource($order);
     }
@@ -144,6 +168,42 @@ class OrderController extends Controller
         $order->load(['items.ticket', 'issuedTickets.ticket']);
 
         return new OrderResource($order);
+    }
+
+    /**
+     * Regenerate ticket card images for all issued tickets on an order.
+     * Permission: update orders
+     */
+    public function regenerateCards(Order $order, TicketCardService $cardService): JsonResponse
+    {
+        if (!auth()->user()->hasRole('super_admin')) {
+            $this->authorize('update orders');
+        }
+
+        $order->loadMissing(['issuedTickets.ticket.event']);
+
+        if ($order->issuedTickets->isEmpty()) {
+            return response()->json(['message' => 'No issued tickets found for this order.'], 422);
+        }
+
+        $generated = 0;
+        foreach ($order->issuedTickets as $issued) {
+            try {
+                $path = $cardService->generate($issued, $order);
+                $issued->update(['ticket_card_path' => $path]);
+                $generated++;
+            } catch (\Throwable $e) {
+                logger()->warning("Card regen failed for issued #{$issued->id}: " . $e->getMessage());
+            }
+        }
+
+        // Return fresh order data with updated card URLs
+        $order->load(['items.ticket', 'manualPayment.reviewer', 'issuedTickets.ticket']);
+
+        return response()->json([
+            'message' => "Regenerated {$generated} ticket card(s).",
+            'order'   => new OrderResource($order),
+        ]);
     }
 
     /**

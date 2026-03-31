@@ -132,6 +132,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         ->middleware('permission:update tickets');
     Route::delete('/tickets/{ticket}/qr', [AdminTicketController::class, 'removeQr'])
         ->middleware('permission:update tickets');
+    Route::post('/tickets/{ticket}/image', [AdminTicketController::class, 'uploadTicketImage'])
+        ->middleware('permission:update tickets');
+    Route::delete('/tickets/{ticket}/image', [AdminTicketController::class, 'removeTicketImage'])
+        ->middleware('permission:update tickets');
 
     // ── Order Management
     Route::get('/orders',                          [AdminOrderController::class, 'index'])
@@ -146,7 +150,9 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         ->middleware('permission:update orders');
     Route::delete('/orders/{order}',               [AdminOrderController::class, 'destroy'])
         ->middleware('permission:delete orders');
-    Route::post('/orders/{order}/send-tickets',    [AdminOrderController::class, 'sendTickets'])
+    Route::post('/orders/{order}/send-tickets',      [AdminOrderController::class, 'sendTickets'])
+        ->middleware('permission:update orders');
+    Route::post('/orders/{order}/regenerate-cards', [AdminOrderController::class, 'regenerateCards'])
         ->middleware('permission:update orders');
 
     // ── Manual Payment Review

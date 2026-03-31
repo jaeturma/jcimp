@@ -119,9 +119,13 @@
         <div class="ticket-wrap">
             <div class="ticket">
 
-                {{-- Cover photo --}}
-                @if($ticketEvent?->cover_url)
-                    <img class="ticket-cover" src="{{ $ticketEvent->cover_url }}" alt="{{ $ticketEvent->name }}" />
+                {{-- Banner: tier image takes priority, then event cover, then placeholder --}}
+                @php
+                    $bannerUrl = $issued->ticket?->ticket_image_url ?? $ticketEvent?->cover_url ?? null;
+                    $bannerAlt = $issued->ticket?->name ?? $ticketEvent?->name ?? 'Event';
+                @endphp
+                @if($bannerUrl)
+                    <img class="ticket-cover" src="{{ $bannerUrl }}" alt="{{ $bannerAlt }}" />
                 @else
                     <div class="ticket-cover-placeholder"><span>🎪</span></div>
                 @endif
