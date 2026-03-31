@@ -185,6 +185,12 @@ const roleBadgeColor = computed(() => {
                             Ticket Scanner
                         </Link>
                     </CNavItem>
+                    <CNavItem>
+                        <Link :href="route('admin.valid-tickets')" class="nav-link">
+                            <CIcon customClassName="nav-icon" icon="cil-check-circle" />
+                            Valid Tickets
+                        </Link>
+                    </CNavItem>
                 </div>
             </template>
 

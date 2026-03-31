@@ -217,8 +217,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 */
 
 Route::middleware(['auth:sanctum', 'staff'])->prefix('admin')->group(function () {
-    Route::post('/scan',   [ScannerController::class, 'scan'])
+    Route::get('/scan/tickets', [ScannerController::class, 'listTickets'])
         ->middleware('permission:scan tickets');
-    Route::get('/scan/stats', [ScannerController::class, 'stats'])
+    Route::post('/scan',        [ScannerController::class, 'scan'])
+        ->middleware('permission:scan tickets');
+    Route::get('/scan/stats',   [ScannerController::class, 'stats'])
         ->middleware('permission:scan tickets');
 });

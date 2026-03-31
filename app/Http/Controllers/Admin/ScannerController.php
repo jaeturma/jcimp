@@ -6,10 +6,70 @@ use App\Http\Controllers\Controller;
 use App\Models\TicketIssued;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 
 class ScannerController extends Controller
 {
+    /**
+     * List all issued tickets with scan status.
+     * Permission: scan tickets
+     */
+    public function listTickets(Request $request): JsonResponse
+    {
+        $query = TicketIssued::with(['ticket', 'order'])
+            ->whereHas('order', fn ($q) => $q->where('status', 'paid'));
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('qr_code', 'like', "%{$search}%")
+                  ->orWhereHas('order', fn ($q2) => $q2
+                      ->where('reference', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%")
+                  );
+            });
+        }
+
+        if ($request->filled('ticket_id')) {
+            $query->where('ticket_id', $request->ticket_id);
+        }
+
+        $perPage = max(1, intval($request->input('per_page', 25)));
+        $tickets = $query->latest()->paginate($perPage);
+
+        return response()->json([
+            'data' => $tickets->map(fn ($t) => [
+                'id'           => $t->id,
+                'qr_code'      => $t->qr_code,
+                'status'       => $t->status,
+                'used_at'      => $t->used_at?->toISOString(),
+                'holder_email' => $t->holder_email,
+                'ticket'       => [
+                    'id'   => $t->ticket?->id,
+                    'name' => $t->ticket?->name,
+                    'type' => $t->ticket?->type,
+                ],
+                'order' => [
+                    'id'        => $t->order?->id,
+                    'reference' => $t->order?->reference,
+                    'email'     => $t->order?->email,
+                    'created_at'=> $t->order?->created_at?->toISOString(),
+                ],
+            ]),
+            'meta' => [
+                'current_page' => $tickets->currentPage(),
+                'last_page'    => $tickets->lastPage(),
+                'total'        => $tickets->total(),
+                'per_page'     => $tickets->perPage(),
+            ],
+        ]);
+    }
+
     /**
      * Validate and redeem a QR code at the venue entrance.
      * Permission: scan tickets

@@ -177,7 +177,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
 */
 
 Route::middleware(['auth', 'staff'])->prefix('admin')->group(function () {
-    Route::get('/scanner', fn () => Inertia::render('Admin/Scanner'))->name('admin.scanner');
+    Route::get('/scanner',        fn () => Inertia::render('Admin/Scanner'))->name('admin.scanner');
+    Route::get('/valid-tickets',  fn () => Inertia::render('Admin/ValidTickets'))->name('admin.valid-tickets');
 });
 
 require __DIR__.'/auth.php';
