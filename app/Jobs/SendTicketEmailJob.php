@@ -23,7 +23,7 @@ class SendTicketEmailJob implements ShouldQueue
 
     public function handle(): void
     {
-        $order = Order::with(['items.ticket', 'issuedTickets'])->find($this->orderId);
+        $order = Order::with(['items.ticket.event', 'issuedTickets.ticket.event'])->find($this->orderId);
 
         if (! $order) {
             Log::warning("SendTicketEmailJob: Order {$this->orderId} not found.");

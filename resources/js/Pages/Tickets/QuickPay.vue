@@ -221,28 +221,51 @@ async function submit() {
                         <CCardHeader class="fw-semibold">Upload Payment Confirmation</CCardHeader>
                         <CCardBody>
 
-                            <!-- GCash QR Code -->
-                            <template v-if="info.ticket.gcash_qr_url">
+                            <!-- Payment QR Codes -->
+                            <template v-if="info.ticket.gcash_qr_url || info.ticket.secondary_qr_url">
                                 <div class="text-center mb-4 p-3 border rounded bg-body-secondary">
-                                    <p class="fw-semibold mb-2">Scan to Pay via GCash</p>
-                                    <img
-                                        :src="info.ticket.gcash_qr_url"
-                                        alt="GCash QR Code"
-                                        class="border border-2 border-success rounded p-2 mb-3"
-                                        style="max-width:200px;max-height:200px;object-fit:contain"
-                                    />
-                                    <div>
-                                        <p class="mb-2 small text-muted">
-                                            Send exactly <strong class="text-success">₱{{ Number(info.ticket.price).toLocaleString() }}</strong> then upload your screenshot below.
-                                        </p>
-                                        <a
-                                            :href="info.ticket.gcash_qr_url"
-                                            download="gcash-qr.png"
-                                            class="btn btn-sm btn-outline-success"
-                                        >
-                                            ⬇ Download QR Code
-                                        </a>
+                                    <p class="fw-semibold mb-2">Scan to Pay</p>
+                                    <div class="d-flex flex-wrap justify-content-center gap-3 mb-3">
+                                        <template v-if="info.ticket.gcash_qr_url">
+                                            <div class="text-center">
+                                                <img
+                                                    :src="info.ticket.gcash_qr_url"
+                                                    alt="GCash QR Code"
+                                                    class="border border-2 border-success rounded p-2 mb-2"
+                                                    style="max-width:200px;max-height:200px;object-fit:contain"
+                                                />
+                                                <div class="text-muted small mb-2">GCash QR Code</div>
+                                                <a
+                                                    :href="info.ticket.gcash_qr_url"
+                                                    download="gcash-qr.png"
+                                                    class="btn btn-sm btn-outline-success"
+                                                >
+                                                    ⬇ Download QR Code
+                                                </a>
+                                            </div>
+                                        </template>
+                                        <template v-if="info.ticket.secondary_qr_url">
+                                            <div class="text-center">
+                                                <img
+                                                    :src="info.ticket.secondary_qr_url"
+                                                    alt="Secondary QR Code"
+                                                    class="border border-2 border-secondary rounded p-2 mb-2"
+                                                    style="max-width:200px;max-height:200px;object-fit:contain"
+                                                />
+                                                <div class="text-muted small mb-2">Alternate QR Code</div>
+                                                <a
+                                                    :href="info.ticket.secondary_qr_url"
+                                                    download="secondary-qr.png"
+                                                    class="btn btn-sm btn-outline-secondary"
+                                                >
+                                                    ⬇ Download QR Code
+                                                </a>
+                                            </div>
+                                        </template>
                                     </div>
+                                    <p class="mb-2 small text-muted">
+                                        Send exactly <strong class="text-success">₱{{ Number(info.ticket.price).toLocaleString() }}</strong> then upload your screenshot below.
+                                    </p>
                                 </div>
                             </template>
                             <CAlert v-else color="secondary" class="py-2 mb-4" style="font-size:.85rem">

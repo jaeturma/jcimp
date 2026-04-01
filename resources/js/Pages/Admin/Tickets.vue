@@ -27,6 +27,16 @@ const qrRemoving   = ref(false);
 const qrMsg        = ref('');
 const qrErr        = ref('');
 
+// Secondary QR modal state
+const secondaryQrModal      = ref(false);
+const secondaryQrTicket     = ref(null);
+const secondaryQrFile       = ref(null);
+const secondaryQrPreview    = ref(null);
+const secondaryQrUploading  = ref(false);
+const secondaryQrRemoving   = ref(false);
+const secondaryQrMsg        = ref('');
+const secondaryQrErr        = ref('');
+
 // Ticket Image modal state
 const imgModal     = ref(false);
 const imgTicket    = ref(null);
@@ -60,14 +70,13 @@ const form = ref(blankForm());
 const selectedEvent = computed(() => events.value.find(e => e.id === selectedEventId.value));
 
 onMounted(() => {
-    load();
     loadEvents();
 });
 
 watch([filters, perPage], () => {
     pagination.value.current_page = 1;
     load(1);
-}, { deep: true });
+}, { deep: true, immediate: true });
 
 async function loadEvents() {
     try {
@@ -251,6 +260,66 @@ async function removeQr() {
     }
 }
 
+function openSecondaryQrModal(ticket) {
+    secondaryQrTicket.value  = ticket;
+    secondaryQrFile.value    = null;
+    secondaryQrPreview.value = ticket.secondary_qr_url ?? null;
+    secondaryQrMsg.value     = '';
+    secondaryQrErr.value     = '';
+    secondaryQrModal.value   = true;
+}
+
+function onSecondaryQrFileChange(e) {
+    const file = e.target.files[0];
+    if (!file) { secondaryQrFile.value = null; return; }
+    secondaryQrFile.value = file;
+    const reader = new FileReader();
+    reader.onload = (ev) => { secondaryQrPreview.value = ev.target.result; };
+    reader.readAsDataURL(file);
+}
+
+async function uploadSecondaryQr() {
+    if (!secondaryQrFile.value) return;
+    secondaryQrUploading.value = true;
+    secondaryQrMsg.value = '';
+    secondaryQrErr.value = '';
+    const fd = new FormData();
+    fd.append('secondary_qr_image', secondaryQrFile.value);
+    try {
+        const res = await axios.post(`/api/admin/tickets/${secondaryQrTicket.value.id}/secondary-qr`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        secondaryQrMsg.value = res.data.message;
+        const idx = tickets.value.findIndex(t => t.id === secondaryQrTicket.value.id);
+        if (idx !== -1) tickets.value[idx].secondary_qr_url = res.data.secondary_qr_url;
+        secondaryQrTicket.value.secondary_qr_url = res.data.secondary_qr_url;
+        secondaryQrFile.value = null;
+    } catch (e) {
+        secondaryQrErr.value = e.response?.data?.message ?? 'Upload failed.';
+    } finally {
+        secondaryQrUploading.value = false;
+    }
+}
+
+async function removeSecondaryQr() {
+    if (!confirm('Remove the secondary QR code for this ticket tier?')) return;
+    secondaryQrRemoving.value = true;
+    secondaryQrMsg.value = '';
+    secondaryQrErr.value = '';
+    try {
+        await axios.delete(`/api/admin/tickets/${secondaryQrTicket.value.id}/secondary-qr`);
+        secondaryQrMsg.value = 'Secondary QR code removed.';
+        secondaryQrPreview.value = null;
+        const idx = tickets.value.findIndex(t => t.id === secondaryQrTicket.value.id);
+        if (idx !== -1) tickets.value[idx].secondary_qr_url = null;
+        secondaryQrTicket.value.secondary_qr_url = null;
+    } catch (e) {
+        secondaryQrErr.value = e.response?.data?.message ?? 'Remove failed.';
+    } finally {
+        secondaryQrRemoving.value = false;
+    }
+}
+
 // ── Ticket Image handlers ─────────────────────────────────────────────────────
 function openImgModal(ticket) {
     imgTicket.value  = ticket;
@@ -370,6 +439,61 @@ async function removeImg() {
                 <CButton color="primary" :disabled="qrUploading || !qrFile" @click="uploadQr">
                     <CSpinner v-if="qrUploading" size="sm" class="me-1" />
                     {{ qrUploading ? 'Uploading…' : 'Save QR Code' }}
+                </CButton>
+            </CModalFooter>
+        </CModal>
+
+        <!-- Secondary QR Modal -->
+        <CModal :visible="secondaryQrModal" @hide="secondaryQrModal = false" alignment="center" size="md">
+            <CModalHeader>
+                <CModalTitle>Secondary QR Code — {{ secondaryQrTicket?.name }}</CModalTitle>
+            </CModalHeader>
+            <CModalBody>
+                <CAlert v-if="secondaryQrErr" color="danger" class="py-2 mb-3">{{ secondaryQrErr }}</CAlert>
+                <CAlert v-if="secondaryQrMsg" color="success" class="py-2 mb-3">{{ secondaryQrMsg }}</CAlert>
+
+                <div class="text-center mb-4">
+                    <div v-if="secondaryQrPreview" class="d-inline-block position-relative">
+                        <img :src="secondaryQrPreview" alt="Secondary QR Code"
+                            class="border border-2 rounded p-2"
+                            style="max-width:220px;max-height:220px;object-fit:contain" />
+                        <div class="mt-2">
+                            <a
+                                v-if="secondaryQrTicket?.secondary_qr_url"
+                                :href="secondaryQrTicket.secondary_qr_url"
+                                download
+                                class="btn btn-sm btn-outline-primary me-2"
+                            >
+                                ⬇ Download QR
+                            </a>
+                            <CButton size="sm" color="danger" variant="outline" :disabled="secondaryQrRemoving" @click="removeSecondaryQr">
+                                <CSpinner v-if="secondaryQrRemoving" size="sm" class="me-1" />
+                                Remove
+                            </CButton>
+                        </div>
+                    </div>
+                    <div v-else class="border rounded d-flex align-items-center justify-content-center bg-light text-muted"
+                        style="height:160px;width:160px;margin:0 auto;font-size:.85rem">
+                        No secondary QR uploaded
+                    </div>
+                </div>
+
+                <hr class="my-3" />
+
+                <CFormLabel class="fw-semibold">Upload / Replace Secondary QR</CFormLabel>
+                <CFormInput
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    class="mb-2"
+                    @change="onSecondaryQrFileChange"
+                />
+                <div class="form-text mb-3">Upload the second QR code image (JPG, PNG, WebP — max 4 MB). Users will see this on checkout as an alternate QR.</div>
+            </CModalBody>
+            <CModalFooter>
+                <CButton color="secondary" variant="outline" @click="secondaryQrModal = false">Close</CButton>
+                <CButton color="primary" :disabled="secondaryQrUploading || !secondaryQrFile" @click="uploadSecondaryQr">
+                    <CSpinner v-if="secondaryQrUploading" size="sm" class="me-1" />
+                    {{ secondaryQrUploading ? 'Uploading…' : 'Save Secondary QR' }}
                 </CButton>
             </CModalFooter>
         </CModal>
@@ -574,7 +698,8 @@ async function removeImg() {
                                 <CTableHeaderCell class="fw-semibold">Revenue</CTableHeaderCell>
                                 <CTableHeaderCell class="fw-semibold text-center">Ticket Image</CTableHeaderCell>
                                 <CTableHeaderCell class="fw-semibold text-center">GCash QR</CTableHeaderCell>
-                                <CTableHeaderCell style="width:180px"></CTableHeaderCell>
+                                <CTableHeaderCell class="fw-semibold text-center">Secondary QR</CTableHeaderCell>
+                                <CTableHeaderCell style="width:220px"></CTableHeaderCell>
                             </CTableRow>
                         </CTableHead>
                         <CTableBody>
@@ -609,6 +734,10 @@ async function removeImg() {
                                     <CBadge v-if="t.gcash_qr_url" color="success" shape="rounded-pill">Set</CBadge>
                                     <CBadge v-else color="secondary" shape="rounded-pill">None</CBadge>
                                 </CTableDataCell>
+                                <CTableDataCell class="text-center">
+                                    <CBadge v-if="t.secondary_qr_url" color="warning" shape="rounded-pill">Set</CBadge>
+                                    <CBadge v-else color="secondary" shape="rounded-pill">None</CBadge>
+                                </CTableDataCell>
                                 <CTableDataCell>
                                     <div class="d-flex gap-1 flex-wrap">
                                         <CButton color="primary" variant="outline" size="sm" @click="openImgModal(t)">
@@ -616,6 +745,9 @@ async function removeImg() {
                                         </CButton>
                                         <CButton color="info" variant="outline" size="sm" @click="openQrModal(t)">
                                             GCash QR
+                                        </CButton>
+                                        <CButton color="warning" variant="outline" size="sm" @click="openSecondaryQrModal(t)">
+                                            2nd QR
                                         </CButton>
                                         <CButton v-if="canUpdateTickets" color="secondary" variant="outline" size="sm" @click="openEdit(t)">
                                             Edit

@@ -5,13 +5,11 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import axios from 'axios';
 
 const props = defineProps({
-    // Cart items: [{ticket_id, ticket_name, ticket_type, quantity, price}]
     cartItems:  { type: Array,  default: () => [] },
     email:      { type: String, default: '' },
     expiresAt:  { type: String, default: '' },
 });
 
-const paymentMethod   = ref('manual');
 const proofFile       = ref(null);
 const submitting      = ref(false);
 const errorMsg        = ref('');
@@ -24,14 +22,31 @@ const proofError      = ref('');
 const secondsLeft = ref(0);
 let timer = null;
 
-onMounted(() => {
-    if (!props.expiresAt) return;
-    const tick = () => {
-        secondsLeft.value = Math.max(0, Math.round((new Date(props.expiresAt) - Date.now()) / 1000));
-        if (secondsLeft.value <= 0) clearInterval(timer);
-    };
-    tick();
-    timer = setInterval(tick, 1000);
+onMounted(async () => {
+    // Save cart to localStorage so nav cart icon stays visible until order is placed
+    if (props.expiresAt && props.cartItems.length) {
+        localStorage.setItem('ticket_cart', JSON.stringify({
+            items:      props.cartItems,
+            email:      props.email,
+            expires_at: props.expiresAt,
+        }));
+    }
+
+    // Start countdown
+    if (props.expiresAt) {
+        const tick = () => {
+            secondsLeft.value = Math.max(0, Math.round((new Date(props.expiresAt) - Date.now()) / 1000));
+            if (secondsLeft.value <= 0) {
+                clearInterval(timer);
+                localStorage.removeItem('ticket_cart');
+            }
+        };
+        tick();
+        timer = setInterval(tick, 1000);
+    }
+
+    // Auto-place order immediately — skip the confirmation screen
+    await placeOrder();
 });
 
 onUnmounted(() => clearInterval(timer));
@@ -49,11 +64,34 @@ const cartTotal = computed(() =>
     props.cartItems.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0)
 );
 
-const hasStudentTicket = computed(() =>
-    props.cartItems.some(i => i.ticket_type === 'student')
+// Unique QR groups from the cart by ticket tier
+const ticketQrGroups = computed(() => {
+    const groups = new Map();
+    for (const item of props.cartItems) {
+        const key = item.ticket_id ?? `${item.ticket_name}-${item.ticket_type}`;
+        if (!groups.has(key)) {
+            groups.set(key, {
+                ticketId: item.ticket_id,
+                ticketName: item.ticket_name || `Ticket ${item.ticket_id}`,
+                ticketType: item.ticket_type || '',
+                quantity: Number(item.quantity) || 1,
+                gcashQrUrl: item.gcash_qr_url || null,
+                secondaryQrUrl: item.secondary_qr_url || null,
+            });
+        }
+    }
+    return Array.from(groups.values());
+});
+
+const hasTicketQrs = computed(() =>
+    ticketQrGroups.value.some(group => group.gcashQrUrl || group.secondaryQrUrl)
 );
 
-// ── Confirm order ──────────────────────────────────────────────────────────────
+const totalQty = computed(() =>
+    props.cartItems.reduce((s, i) => s + Number(i.quantity), 0)
+);
+
+// ── Place order (called automatically on mount) ────────────────────────────────
 async function placeOrder() {
     if (isExpired.value) { errorMsg.value = 'Your reservation has expired. Please start again.'; return; }
     if (!props.cartItems.length) { errorMsg.value = 'Cart is empty.'; return; }
@@ -65,18 +103,10 @@ async function placeOrder() {
         const res = await axios.post('/api/checkout', {
             items:          props.cartItems.map(i => ({ ticket_id: i.ticket_id, quantity: i.quantity })),
             email:          props.email,
-            payment_method: paymentMethod.value,
+            payment_method: 'manual',
         });
         order.value = res.data;
-
-        if (paymentMethod.value === 'qrph') {
-            if (res.data.payment_url) {
-                window.location.href = res.data.payment_url;
-            } else {
-                router.visit(route('orders.status', { reference: res.data.order_reference }));
-            }
-        }
-        // Manual: stay to show proof upload
+        localStorage.removeItem('ticket_cart');
     } catch (e) {
         const err = e.response?.data;
         errorMsg.value = err?.message ?? 'Failed to place order. Please try again.';
@@ -132,7 +162,7 @@ async function uploadProof() {
                 </template>
 
                 <!-- Expired -->
-                <template v-else-if="isExpired">
+                <template v-else-if="isExpired && !order">
                     <CAlert color="danger" class="text-center">
                         <p class="fw-bold fs-4 mb-2">⏰ Reservation Expired</p>
                         <p class="mb-3">Your 10-minute hold has ended. Please select tickets again.</p>
@@ -157,24 +187,122 @@ async function uploadProof() {
                     </CCard>
                 </template>
 
-                <!-- Manual proof upload step -->
-                <template v-else-if="order && paymentMethod === 'manual'">
+                <!-- Processing / placing order -->
+                <template v-else-if="submitting">
+                    <CCard class="shadow-sm text-center">
+                        <CCardBody class="p-5">
+                            <CSpinner color="primary" class="mb-3" />
+                            <p class="text-muted mb-0">Processing your order…</p>
+                        </CCardBody>
+                    </CCard>
+                </template>
+
+                <!-- Order failed -->
+                <template v-else-if="errorMsg && !order">
+                    <CAlert color="danger" class="text-center">
+                        <p class="fw-bold mb-2">{{ errorMsg }}</p>
+                        <CButton color="primary" @click="router.visit(route('tickets.index'))">
+                            Back to Tickets
+                        </CButton>
+                    </CAlert>
+                </template>
+
+                <!-- Upload Payment Proof -->
+                <template v-else-if="order">
                     <CCard class="shadow-sm">
                         <CCardHeader>
                             <h3 class="fs-5 fw-bold mb-0">Upload Payment Proof</h3>
                         </CCardHeader>
                         <CCardBody class="p-4">
+
+                            <!-- Countdown -->
+                            <CAlert v-if="expiresAt"
+                                :color="secondsLeft < 60 ? 'danger' : 'info'"
+                                class="d-flex align-items-center justify-content-between mb-4">
+                                <span class="fw-medium">⏱ Reservation expires in</span>
+                                <span class="font-monospace fs-4 fw-bold">{{ countdownDisplay }}</span>
+                            </CAlert>
+
                             <p class="text-muted small mb-4">
-                                Order:
-                                <span class="font-monospace fw-semibold text-primary">{{ order.order_reference }}</span>
+                                Order: <span class="font-monospace fw-semibold text-primary">{{ order.order_reference }}</span>
                             </p>
 
+                            <!-- QR code pairs for each ticket tier -->
+                            <template v-if="hasTicketQrs">
+                                <p class="small fw-semibold text-muted mb-2">Scan to Pay</p>
+                                <div class="d-flex flex-column gap-4 mb-4">
+                                    <div v-for="group in ticketQrGroups" :key="group.ticketId || group.ticketName" class="border rounded p-3 bg-body-secondary">
+                                        <div class="d-flex flex-column flex-sm-row align-items-start justify-content-between gap-3 mb-3">
+                                            <div>
+                                                <div class="fw-semibold">{{ group.ticketName }}</div>
+                                                <div class="text-muted small">Quantity: {{ group.quantity }}</div>
+                                            </div>
+                                            <div class="text-end text-muted small">
+                                                <span v-if="group.gcashQrUrl || group.secondaryQrUrl">Scan either QR code to complete payment.</span>
+                                                <span v-else>No QR available for this tier.</span>
+                                            </div>
+                                        </div>
+                                        <div class="row row-cols-1 row-cols-md-2 gx-3 gy-3 justify-content-center">
+                                            <template v-if="group.gcashQrUrl">
+                                                <div class="col d-flex flex-column align-items-center text-center">
+                                                    <img
+                                                        :src="group.gcashQrUrl"
+                                                        alt="GCash QR Code"
+                                                        class="border border-2 border-success rounded p-2 mb-3"
+                                                        style="max-width:200px;max-height:200px;object-fit:contain"
+                                                    />
+                                                    <div class="text-muted small mb-3">GCash QR Code</div>
+                                                    <a
+                                                        :href="group.gcashQrUrl"
+                                                        :download="`gcash-qr-${group.ticketId || group.ticketName}.png`"
+                                                        class="btn btn-sm btn-outline-success"
+                                                    >
+                                                        ⬇ Download QR Code
+                                                    </a>
+                                                </div>
+                                            </template>
+                                            <template v-if="group.secondaryQrUrl">
+                                                <div class="col d-flex flex-column align-items-center text-center">
+                                                    <img
+                                                        :src="group.secondaryQrUrl"
+                                                        alt="Secondary QR Code"
+                                                        class="border border-2 border-secondary rounded p-2 mb-3"
+                                                        style="max-width:200px;max-height:200px;object-fit:contain"
+                                                    />
+                                                    <div class="text-muted small mb-3">Alternate QR Code</div>
+                                                    <a
+                                                        :href="group.secondaryQrUrl"
+                                                        :download="`secondary-qr-${group.ticketId || group.ticketName}.png`"
+                                                        class="btn btn-sm btn-outline-secondary"
+                                                    >
+                                                        ⬇ Download QR Code
+                                                    </a>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            <template v-else-if="totalQty > 1">
+                                <p class="small fw-semibold text-muted mb-2">Scan to Pay</p>
+                                <div class="d-flex flex-wrap gap-3 justify-content-center mb-4">
+                                    <div class="text-center">
+                                        <img
+                                            src="/bulkqr.png"
+                                            alt="GCash QR"
+                                            class="border rounded shadow-sm"
+                                            style="max-width:200px; width:100%;"
+                                        />
+                                        <div class="text-muted small mt-1">GCash / InstaPay</div>
+                                    </div>
+                                </div>
+                            </template>
+
                             <CAlert color="warning" class="mb-4">
-                                <strong>GCash / Bank Transfer</strong><br />
-                                Send <strong>₱{{ cartTotal.toLocaleString() }}</strong> to
-                                <strong>09XX-XXX-XXXX</strong> (GCash)<br />
+                                <strong>Payment Instructions</strong><br />
+                                Amount: <strong>₱{{ cartTotal.toLocaleString() }}</strong><br />
                                 Reference: <strong>{{ order.order_reference }}</strong><br />
-                                Then upload your screenshot below.
+                                <span class="small">Scan the QR above{{ hasTicketQrs ? '' : ' or transfer via GCash / Bank' }}, then upload your screenshot below.</span>
                             </CAlert>
 
                             <CForm>
@@ -201,107 +329,6 @@ async function uploadProof() {
                                     {{ proofSubmitting ? 'Uploading…' : '📤 Submit Payment Proof' }}
                                 </CButton>
                             </CForm>
-                        </CCardBody>
-                    </CCard>
-                </template>
-
-                <!-- Main checkout form -->
-                <template v-else>
-                    <CCard class="shadow-sm">
-                        <CCardBody class="p-4">
-
-                            <!-- Countdown -->
-                            <CAlert v-if="expiresAt"
-                                :color="secondsLeft < 60 ? 'danger' : 'info'"
-                                class="d-flex align-items-center justify-content-between mb-4">
-                                <span class="fw-medium">⏱ Reservation expires in</span>
-                                <span class="font-monospace fs-4 fw-bold">{{ countdownDisplay }}</span>
-                            </CAlert>
-
-                            <!-- Order summary -->
-                            <h3 class="fs-6 fw-semibold mb-3">Order Summary</h3>
-                            <CListGroup class="mb-4">
-                                <CListGroupItem
-                                    v-for="(item, i) in cartItems"
-                                    :key="i"
-                                    class="d-flex align-items-center justify-content-between py-3"
-                                >
-                                    <div>
-                                        <p class="fw-medium text-dark mb-1">{{ item.ticket_name }}</p>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <CBadge v-if="item.ticket_type === 'student'"
-                                                color="info"
-                                                shape="rounded-pill"
-                                                class="small">
-                                                🎓 Student
-                                            </CBadge>
-                                            <span class="text-muted" style="font-size: 0.75rem;">
-                                                {{ item.quantity }} × ₱{{ Number(item.price).toLocaleString() }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <span class="fw-semibold text-dark">
-                                        ₱{{ (Number(item.price) * Number(item.quantity)).toLocaleString() }}
-                                    </span>
-                                </CListGroupItem>
-                            </CListGroup>
-
-                            <!-- Info strip -->
-                            <CRow class="bg-light rounded px-2 py-3 mb-4 g-0">
-                                <CCol :cols="6">
-                                    <span class="text-muted d-block" style="font-size: 0.75rem;">Email</span>
-                                    <span class="fw-medium text-break">{{ email }}</span>
-                                </CCol>
-                                <CCol :cols="6">
-                                    <span class="text-muted d-block" style="font-size: 0.75rem;">Total</span>
-                                    <span class="fs-4 fw-bold text-dark">₱{{ cartTotal.toLocaleString() }}</span>
-                                </CCol>
-                            </CRow>
-
-                            <!-- Student note -->
-                            <CAlert v-if="hasStudentTicket" color="info" class="mb-4 small">
-                                🎓 This order includes a student ticket. Only 1 student ticket is allowed per person.
-                            </CAlert>
-
-                            <!-- Payment method -->
-                            <p class="small fw-semibold text-muted mb-2">Payment Method</p>
-                            <div class="d-flex gap-3 mb-4">
-                                <CButton
-                                    :color="paymentMethod === 'qrph' ? 'primary' : 'secondary'"
-                                    :variant="paymentMethod === 'qrph' ? undefined : 'outline'"
-                                    class="flex-fill py-3"
-                                    @click="paymentMethod = 'qrph'"
-                                >
-                                    <div class="fs-4">📱</div>
-                                    <div class="fw-semibold mt-1">QR Ph</div>
-                                    <div class="text-muted" style="font-size: 0.72rem;">GCash / InstaPay</div>
-                                </CButton>
-                                <CButton
-                                    :color="paymentMethod === 'manual' ? 'primary' : 'secondary'"
-                                    :variant="paymentMethod === 'manual' ? undefined : 'outline'"
-                                    class="flex-fill py-3"
-                                    @click="paymentMethod = 'manual'"
-                                >
-                                    <div class="fs-4">🧾</div>
-                                    <div class="fw-semibold mt-1">Manual</div>
-                                    <div class="text-muted" style="font-size: 0.72rem;">Upload proof</div>
-                                </CButton>
-                            </div>
-
-                            <CAlert v-if="errorMsg" color="danger" class="mb-3">
-                                {{ errorMsg }}
-                            </CAlert>
-
-                            <CButton
-                                color="primary"
-                                class="w-100 py-3"
-                                @click="placeOrder"
-                                :disabled="submitting || isExpired"
-                            >
-                                <CSpinner v-if="submitting" size="sm" class="me-2" />
-                                {{ submitting ? 'Processing…' : '✅ Confirm Order' }}
-                            </CButton>
-
                         </CCardBody>
                     </CCard>
                 </template>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import axios from 'axios';
@@ -15,9 +15,7 @@ const filters = ref({ status: '', search: '' });
 const perPage = ref(10);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0 });
 
-onMounted(() => load());
-
-watch([filters, perPage], () => { pagination.value.current_page = 1; load(1); }, { deep: true });
+watch([filters, perPage], () => { pagination.value.current_page = 1; load(1); }, { deep: true, immediate: true });
 
 async function load(page = 1) {
     loading.value = true;
@@ -102,16 +100,15 @@ const statusBadge = (s) => ({
                 </CModalHeader>
                 <CModalBody>
                     <!-- Proof Image -->
-                    <div class="border rounded bg-body-secondary d-flex align-items-center justify-content-center mb-4 overflow-hidden"
-                        style="min-height: 200px;">
+                    <div class="border rounded bg-body-secondary mb-4 overflow-auto text-center"
+                        style="max-height: 480px; min-height: 160px;">
                         <img
                             v-if="proofUrl"
                             :src="proofUrl"
                             alt="Payment Proof"
-                            class="img-fluid rounded"
-                            style="max-height: 320px; object-fit: contain;"
+                            style="width: 100%; height: auto; display: block;"
                         />
-                        <div v-else class="text-center text-muted py-4">
+                        <div v-else class="text-center text-muted py-5">
                             <CSpinner size="sm" class="me-2" />
                             Loading proof image…
                         </div>
@@ -253,6 +250,7 @@ const statusBadge = (s) => ({
                                 <CTableRow>
                                     <CTableHeaderCell>Order</CTableHeaderCell>
                                     <CTableHeaderCell>Email</CTableHeaderCell>
+                                    <CTableHeaderCell>Tickets</CTableHeaderCell>
                                     <CTableHeaderCell>Amount</CTableHeaderCell>
                                     <CTableHeaderCell>Status</CTableHeaderCell>
                                     <CTableHeaderCell>Submitted</CTableHeaderCell>
@@ -265,6 +263,11 @@ const statusBadge = (s) => ({
                                         {{ p.order?.reference }}
                                     </CTableDataCell>
                                     <CTableDataCell class="text-muted">{{ p.order?.email }}</CTableDataCell>
+                                    <CTableDataCell class="text-center">
+                                        <CBadge color="info" shape="rounded-pill">
+                                            {{ (p.order?.items ?? []).reduce((s, i) => s + i.quantity, 0) }}
+                                        </CBadge>
+                                    </CTableDataCell>
                                     <CTableDataCell class="fw-semibold">
                                         ₱{{ Number(p.order?.total_amount).toLocaleString() }}
                                     </CTableDataCell>
@@ -303,7 +306,7 @@ const statusBadge = (s) => ({
                                     </CTableDataCell>
                                 </CTableRow>
                                 <CTableRow v-if="!payments.length">
-                                    <CTableDataCell colspan="6" class="text-center text-muted py-5">
+                                    <CTableDataCell colspan="7" class="text-center text-muted py-5">
                                         No payments found.
                                     </CTableDataCell>
                                 </CTableRow>

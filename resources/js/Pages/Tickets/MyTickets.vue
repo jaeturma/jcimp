@@ -18,7 +18,16 @@ const error          = ref('');
 const offlineTickets = ref([]);
 const offlineLoading = ref(false);
 
-// modal state
+// ── Ticket card viewer modal ───────────────────────────────────────────────────
+const cardModal   = ref(false);
+const cardTicket  = ref(null);
+
+function viewCard(ticket) {
+    cardTicket.value = ticket;
+    cardModal.value  = true;
+}
+
+// ── Action modal ──────────────────────────────────────────────────────────────
 const actionModal  = ref(false);
 const actionType   = ref('');   // 'assign' | 'transfer' | 'resell' | 'cancel_resell'
 const actionTicket = ref(null);
@@ -222,17 +231,29 @@ async function submitAction() {
                 </div>
 
                 <CRow class="g-3 mb-4">
-                    <CCol v-for="t in issuedList" :key="t.qr_code" xs="12" md="6" lg="4">
+                    <CCol v-for="t in issuedList" :key="t.qr_code" xs="12" sm="6" md="4">
                         <CCard :class="['h-100', t.status === 'used' ? 'opacity-50' : '']">
                             <CCardHeader class="d-flex align-items-center justify-content-between">
-                                <span class="fw-semibold text-truncate me-2">{{ t.ticket_name }}</span>
+                                <span class="fw-semibold text-truncate me-2">{{ t.event_name }}</span>
                                 <CBadge :color="t.status === 'valid' ? 'success' : 'secondary'" class="text-capitalize flex-shrink-0">
                                     {{ t.status }}
                                 </CBadge>
                             </CCardHeader>
                             <CCardBody>
-                                <p class="small text-muted mb-1">{{ t.event_name }}</p>
-                                <p class="small text-muted mb-2 text-capitalize">Type: {{ t.ticket_type }}</p>
+
+                                <!-- Ticket Tier & Amount -->
+                                <div class="d-flex gap-2 mb-2">
+                                    <div class="flex-grow-1 p-2 rounded" style="background:var(--cui-tertiary-bg,#f0f4f8)">
+                                        <div class="text-muted mb-1" style="font-size:.7rem">TICKET TIER</div>
+                                        <div class="fw-semibold small text-capitalize">{{ t.ticket_name }}</div>
+                                    </div>
+                                    <div class="p-2 rounded" style="background:var(--cui-tertiary-bg,#f0f4f8)">
+                                        <div class="text-muted mb-1" style="font-size:.7rem">AMOUNT</div>
+                                        <div class="fw-bold small text-primary">
+                                            {{ t.ticket_price != null ? '₱' + Number(t.ticket_price).toLocaleString() : '—' }}
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <!-- Holder -->
                                 <div v-if="t.holder_name" class="mb-2">
@@ -240,7 +261,7 @@ async function submitAction() {
                                     <span class="small text-muted ms-1">{{ t.holder_name }}</span>
                                 </div>
 
-                                <!-- QR code -->
+                                <!-- QR code text (always shown as reference) -->
                                 <div class="bg-light rounded p-2 mb-3 font-monospace" style="font-size:.7rem;word-break:break-all">
                                     {{ t.qr_code }}
                                 </div>
@@ -255,17 +276,24 @@ async function submitAction() {
                                     Used {{ fmt(t.used_at) }}
                                 </div>
                             </CCardBody>
-                            <!-- Actions (only for valid tickets) -->
-                            <CCardFooter v-if="t.status === 'valid'" class="d-flex gap-1 flex-wrap">
-                                <CButton size="sm" color="info" variant="outline" @click="openAssign(t)">
-                                    Assign Name
+                            <!-- Footer -->
+                            <CCardFooter class="d-flex gap-1 flex-wrap">
+                                <CButton
+                                    v-if="t.ticket_card_url"
+                                    size="sm"
+                                    color="primary"
+                                    @click="viewCard(t)"
+                                >
+                                    🎟 View Ticket
                                 </CButton>
-                                <CButton size="sm" color="primary" variant="outline" @click="openTransfer(t)" :disabled="t.is_for_resale">
-                                    Transfer
-                                </CButton>
-                                <CButton size="sm" :color="t.is_for_resale ? 'danger' : 'warning'" variant="outline" @click="openResell(t)">
-                                    {{ t.is_for_resale ? 'Cancel Resale' : 'Resell' }}
-                                </CButton>
+                                <template v-if="t.status === 'valid'">
+                                    <CButton size="sm" color="info" variant="outline" @click="openAssign(t)">
+                                        Assign Name
+                                    </CButton>
+                                    <CButton size="sm" color="secondary" variant="outline" @click="openTransfer(t)">
+                                        Transfer
+                                    </CButton>
+                                </template>
                             </CCardFooter>
                         </CCard>
                     </CCol>
@@ -275,35 +303,51 @@ async function submitAction() {
             <!-- Orders history -->
             <template v-if="result.orders?.length">
                 <h5 class="fw-semibold mb-3">Order History</h5>
-                <div v-for="order in result.orders" :key="order.reference" class="mb-3">
-                    <CCard>
-                        <CCardBody>
-                            <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-2">
-                                <div>
-                                    <div class="fw-semibold">
-                                        <code class="font-monospace">{{ order.reference }}</code>
-                                    </div>
-                                    <div class="text-muted small">{{ fmt(order.created_at) }}</div>
-                                </div>
-                                <div class="text-end">
-                                    <CBadge :color="statusColor(order.status)" class="text-capitalize">
-                                        {{ order.status?.replace('_', ' ') ?? 'unknown' }}
-                                    </CBadge>
-                                    <div class="fw-semibold mt-1">₱{{ Number(order.amount ?? 0).toLocaleString() }}</div>
-                                </div>
-                            </div>
-                            <ul class="small mb-2">
-                                <li v-for="item in order.items" :key="item.ticket_id">
-                                    {{ item.quantity }}× {{ item.ticket_name }}
-                                    (₱{{ Number(item.price).toLocaleString() }})
-                                </li>
-                            </ul>
-                            <CButton size="sm" color="secondary" variant="outline" :href="route('orders.status', { reference: order.reference })">
-                                View Status
-                            </CButton>
-                        </CCardBody>
-                    </CCard>
-                </div>
+                <CCard class="mb-4">
+                    <div class="table-responsive">
+                        <CTable striped hover class="mb-0">
+                            <CTableHead>
+                                <CTableRow>
+                                    <CTableHeaderCell>Reference</CTableHeaderCell>
+                                    <CTableHeaderCell>Tickets</CTableHeaderCell>
+                                    <CTableHeaderCell>Amount</CTableHeaderCell>
+                                    <CTableHeaderCell>Status</CTableHeaderCell>
+                                    <CTableHeaderCell>Date</CTableHeaderCell>
+                                    <CTableHeaderCell></CTableHeaderCell>
+                                </CTableRow>
+                            </CTableHead>
+                            <CTableBody>
+                                <CTableRow v-for="order in result.orders" :key="order.reference">
+                                    <CTableDataCell class="font-monospace fw-semibold text-primary small">
+                                        {{ order.reference }}
+                                    </CTableDataCell>
+                                    <CTableDataCell class="small text-muted">
+                                        <div v-for="item in order.items" :key="item.ticket_id">
+                                            {{ item.quantity }}× {{ item.ticket_name }}
+                                        </div>
+                                    </CTableDataCell>
+                                    <CTableDataCell class="fw-semibold">
+                                        ₱{{ Number(order.total_amount ?? 0).toLocaleString() }}
+                                    </CTableDataCell>
+                                    <CTableDataCell>
+                                        <CBadge :color="statusColor(order.status)" class="text-capitalize">
+                                            {{ order.status?.replace(/_/g, ' ') ?? 'unknown' }}
+                                        </CBadge>
+                                    </CTableDataCell>
+                                    <CTableDataCell class="text-muted small">
+                                        {{ fmt(order.created_at) }}
+                                    </CTableDataCell>
+                                    <CTableDataCell>
+                                        <CButton size="sm" color="secondary" variant="outline"
+                                            :href="route('orders.status', { reference: order.reference })">
+                                            View
+                                        </CButton>
+                                    </CTableDataCell>
+                                </CTableRow>
+                            </CTableBody>
+                        </CTable>
+                    </div>
+                </CCard>
             </template>
 
             <!-- Empty state -->
@@ -372,6 +416,47 @@ async function submitAction() {
                 </CCard>
             </template>
         </template>
+
+        <!-- Ticket Card Viewer Modal -->
+        <CModal
+            :visible="cardModal"
+            @hide="cardModal = false"
+            alignment="center"
+            size="lg"
+            scrollable
+        >
+            <CModalHeader>
+                <CModalTitle class="fw-semibold">
+                    {{ cardTicket?.ticket_name }}
+                    <CBadge
+                        :color="cardTicket?.status === 'valid' ? 'success' : 'secondary'"
+                        class="ms-2 text-capitalize"
+                        style="font-size:.7rem;"
+                    >{{ cardTicket?.status }}</CBadge>
+                </CModalTitle>
+            </CModalHeader>
+            <CModalBody class="p-2 text-center bg-dark">
+                <img
+                    v-if="cardTicket?.ticket_card_url"
+                    :src="cardTicket.ticket_card_url"
+                    :alt="cardTicket.ticket_name"
+                    style="width:100%;max-width:480px;height:auto;border-radius:8px;"
+                />
+            </CModalBody>
+            <CModalFooter>
+                <a
+                    v-if="cardTicket?.ticket_card_url"
+                    :href="cardTicket.ticket_card_url"
+                    download
+                    class="btn btn-success flex-grow-1"
+                >
+                    ⬇ Download Ticket Card
+                </a>
+                <CButton color="secondary" variant="outline" @click="cardModal = false">
+                    Close
+                </CButton>
+            </CModalFooter>
+        </CModal>
 
         <!-- Action Modal (Assign / Transfer / Resell) -->
         <CModal :visible="actionModal" @hide="actionModal = false" alignment="center">

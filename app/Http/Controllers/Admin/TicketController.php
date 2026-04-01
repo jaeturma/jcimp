@@ -33,8 +33,9 @@ class TicketController extends Controller
             'available'        => $t->availableQuantity(),
             'revenue'          => number_format($t->sold_quantity * $t->price, 2),
             'event_name'       => $t->event?->name,
-            'gcash_qr_url'     => $t->gcash_qr     ? Storage::disk('public')->url($t->gcash_qr)     : null,
-            'ticket_image_url' => $t->ticket_image  ? Storage::disk('public')->url($t->ticket_image) : null,
+            'gcash_qr_url'        => $t->gcash_qr        ? Storage::disk('public')->url($t->gcash_qr)        : null,
+            'secondary_qr_url'    => $t->secondary_qr    ? Storage::disk('public')->url($t->secondary_qr)    : null,
+            'ticket_image_url'    => $t->ticket_image     ? Storage::disk('public')->url($t->ticket_image)     : null,
         ]);
 
         return response()->json($tickets);
@@ -92,6 +93,39 @@ class TicketController extends Controller
             'message'      => 'GCash QR code updated.',
             'gcash_qr_url' => Storage::disk('public')->url($path),
         ]);
+    }
+
+    /**
+     * Upload or replace the secondary QR image for a ticket tier.
+     */
+    public function uploadSecondaryQr(Request $request, Ticket $ticket): JsonResponse
+    {
+        $request->validate(['secondary_qr_image' => 'required|file|image|max:4096']);
+
+        if ($ticket->secondary_qr) {
+            Storage::disk('public')->delete($ticket->secondary_qr);
+        }
+
+        $path = $request->file('secondary_qr_image')->store('secondary-qr', 'public');
+        $ticket->update(['secondary_qr' => $path]);
+
+        return response()->json([
+            'message'           => 'Secondary QR code updated.',
+            'secondary_qr_url'  => Storage::disk('public')->url($path),
+        ]);
+    }
+
+    /**
+     * Remove the secondary QR for a ticket tier.
+     */
+    public function removeSecondaryQr(Ticket $ticket): JsonResponse
+    {
+        if ($ticket->secondary_qr) {
+            Storage::disk('public')->delete($ticket->secondary_qr);
+            $ticket->update(['secondary_qr' => null]);
+        }
+
+        return response()->json(['message' => 'Secondary QR code removed.']);
     }
 
     /**

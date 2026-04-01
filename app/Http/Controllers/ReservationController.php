@@ -6,6 +6,7 @@ use App\Http\Requests\ReserveTicketRequest;
 use App\Models\Reservation;
 use App\Models\StudentVerification;
 use App\Models\Ticket;
+use App\Models\TicketIssued;
 use App\Services\ReservationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,11 +40,15 @@ class ReservationController extends Controller
         });
 
         if ($hasStudentTicket) {
-            $user = $request->user();
+            $user       = $request->user();
+            $orderEmail = strtolower(trim($request->input('email')));
 
             // Logged-in user with verified student status — no token needed
             if ($user && $user->canBuyStudentTicket()) {
-                // verified ✓
+                // Check 1-ticket limit for this email
+                if ($this->emailHasStudentTicket($orderEmail)) {
+                    return response()->json(['message' => 'This email already has a student ticket. Only 1 student ticket is allowed per verified email.'], 422);
+                }
             } else {
                 // Guest or unverified user — require a valid student access token
                 $token = $request->input('student_access_token');
@@ -56,6 +61,10 @@ class ReservationController extends Controller
                     ->first();
                 if (!$sv) {
                     return response()->json(['message' => 'Student verification token is invalid or expired. Please re-verify your student email.'], 422);
+                }
+                // Check 1-ticket limit for both the order email and the verified student email
+                if ($this->emailHasStudentTicket($orderEmail) || $this->emailHasStudentTicket($sv->guest_email)) {
+                    return response()->json(['message' => 'This student email already has a student ticket. Only 1 student ticket is allowed per verified email.'], 422);
                 }
             }
         }
@@ -120,5 +129,34 @@ class ReservationController extends Controller
         $this->reservationService->release($reservation);
 
         return response()->json(['message' => 'Reservation released.']);
+    }
+
+    private function emailHasStudentTicket(string $email): bool
+    {
+        return TicketIssued::whereHas('order', fn ($q) => $q->where('email', $email))
+            ->whereHas('ticket', fn ($q) => $q->where('type', 'student'))
+            ->whereIn('status', ['valid', 'used'])
+            ->exists();
+    }
+
+    /**
+     * Cancel all active reservations for an email (abandon cart).
+     *
+     * DELETE /api/cart/reserve
+     * Body: { email }
+     */
+    public function cancelCart(Request $request): JsonResponse
+    {
+        $request->validate(['email' => ['required', 'email', 'max:255']]);
+
+        $reservations = Reservation::where('email', $request->string('email')->value())
+            ->where('expires_at', '>', now())
+            ->get();
+
+        foreach ($reservations as $reservation) {
+            $this->reservationService->release($reservation);
+        }
+
+        return response()->json(['message' => 'Cart cancelled.', 'released' => $reservations->count()]);
     }
 }

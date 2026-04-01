@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import axios from 'axios';
@@ -18,8 +18,7 @@ const perPage    = ref(10);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0 });
 const statusOpts = ['', 'pending', 'approved', 'rejected'];
 
-onMounted(() => load());
-watch([filters, perPage], () => { pagination.value.current_page = 1; load(1); }, { deep: true });
+watch([filters, perPage], () => { pagination.value.current_page = 1; load(1); }, { deep: true, immediate: true });
 
 async function load(page = 1) {
     loading.value = true;
@@ -263,12 +262,14 @@ const typeColor   = (t) => t === 'college' ? 'info' : 'primary';
                     <!-- Student ID image -->
                     <template v-if="selected.id_image_url">
                         <h6 class="fw-semibold mb-2">Student ID</h6>
-                        <a :href="selected.id_image_url" target="_blank" class="d-block mb-1">
+                        <div class="border rounded bg-body-secondary mb-1 overflow-auto text-center"
+                            style="max-height:480px;">
                             <img :src="selected.id_image_url" alt="Student ID"
-                                class="img-fluid rounded border"
-                                style="max-height:260px;object-fit:contain;width:100%" />
-                        </a>
-                        <p class="text-muted small">Link expires in 10 minutes. Click to open full size.</p>
+                                style="width:100%;height:auto;display:block;" />
+                        </div>
+                        <p class="text-muted small">Link expires in 10 minutes.
+                            <a :href="selected.id_image_url" target="_blank">Open full size</a>
+                        </p>
                     </template>
                     <p v-else-if="selected.student_type === 'college'" class="text-muted small">
                         College email — no ID required (auto-verified via .edu.ph).

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import axios from 'axios';
@@ -27,8 +27,7 @@ const canModifyEvents = computed(() => !!page.props.auth?.isAdmin);
 const canViewEvents = computed(() => !!(page.props.auth?.isAdmin || page.props.auth?.isManager));
 const isEditing = computed(() => !!editingEvent.value);
 
-onMounted(() => load());
-watch([filters, perPage], () => { pagination.value.current_page = 1; load(); }, { deep: true });
+watch([filters, perPage], () => { pagination.value.current_page = 1; load(); }, { deep: true, immediate: true });
 
 async function load(page = 1) {
     loading.value = true;

@@ -90,19 +90,19 @@ class RolesAndPermissionsSeeder extends Seeder
             'scan tickets',
         ]);
 
-        // staff → scan tickets, view dashboard, orders, student verifications
+        // staff → only ticket view and scan access
         $staff->syncPermissions([
-            'view dashboard',
-            'view orders',
-            'review manual payments',
-            'verify students',
+            'view tickets',
             'scan tickets',
         ]);
 
-        // validator → scan + orders + student verify
+        // validator → verify students, review payments, send tickets, scan tickets
         $validator->syncPermissions([
             'view dashboard',
+            'view tickets',
             'view orders',
+            'update orders',
+            'review manual payments',
             'verify students',
             'scan tickets',
         ]);

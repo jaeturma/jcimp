@@ -5,21 +5,16 @@ namespace App\Services;
 use App\Jobs\GenerateTicketJob;
 use App\Models\ManualPayment;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Reservation;
 use App\Models\Ticket;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 class PaymentService
 {
-    public function __construct(
-        private readonly PaymentProofOcrService $ocrService = new PaymentProofOcrService(),
-    ) {}
     /**
      * Create an order from one or more reservations (cart checkout).
      *
@@ -71,63 +66,19 @@ class PaymentService
     }
 
     /**
-     * Handle manual payment proof upload with automatic OCR extraction.
-     *
-     * @param Order $order
-     * @param UploadedFile $file
-     * @param string|null $transactionNumber (optional, will be auto-extracted via OCR if null)
-     * @param float|string|null $transactionAmount (optional, will be auto-extracted via OCR if null)
-     * @return ManualPayment
+     * Store manual payment proof and mark the order as pending_verification.
      */
-    public function submitManualProof(
-        Order $order,
-        UploadedFile $file,
-        ?string $transactionNumber = null,
-        ?string $transactionAmount = null,
-    ): ManualPayment {
-        // Store the proof file
+    public function submitManualProof(Order $order, UploadedFile $file): ManualPayment
+    {
         $path = $file->store('payment_proofs', 'private');
 
-        return DB::transaction(function () use ($order, $file, $path, $transactionNumber, $transactionAmount) {
-            // Try OCR extraction if transaction details are not provided or incomplete
-            $ocrResult = null;
-            $ocrExtracted = false;
-            
-            if (empty($transactionNumber) || empty($transactionAmount)) {
-                $ocrResult = $this->ocrService->extractWithFallback($file);
-                
-                // Use OCR results if extraction was successful
-                if ($ocrResult['success']) {
-                    $transactionNumber = $transactionNumber ?? $ocrResult['transaction_number'];
-                    $transactionAmount = $transactionAmount ?? $ocrResult['transaction_amount'];
-                    $ocrExtracted = true;
-                    
-                    Log::info('OCR Successfully extracted transaction details', [
-                        'transaction_number' => $transactionNumber,
-                        'transaction_amount' => $transactionAmount,
-                        'confidence' => $ocrResult['confidence'],
-                    ]);
-                } else {
-                    Log::warning('OCR extraction failed for manual payment', [
-                        'order_id' => $order->id,
-                        'error' => $ocrResult['error'] ?? 'Unknown error',
-                    ]);
-                }
-            }
-
-            // Update order status
+        return DB::transaction(function () use ($order, $path) {
             $order->update(['status' => 'pending_verification']);
 
-            // Create manual payment record with OCR data
             return ManualPayment::create([
-                'order_id'           => $order->id,
-                'proof_image'        => $path,
-                'transaction_number' => $transactionNumber,
-                'transaction_amount' => !empty($transactionAmount) ? (float) $transactionAmount : null,
-                'ocr_text'           => $ocrResult['ocr_text'] ?? null,
-                'ocr_confidence'     => $ocrResult['confidence'] ?? null,
-                'ocr_extracted'      => $ocrExtracted,
-                'status'             => 'pending',
+                'order_id'    => $order->id,
+                'proof_image' => $path,
+                'status'      => 'pending',
             ]);
         });
     }

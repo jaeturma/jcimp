@@ -17,8 +17,8 @@ const pagination = ref({ current_page: 1, last_page: 1, total: 0 });
 const stats    = ref({ total_issued: 0, total_admitted: 0, total_remaining: 0, admission_rate: 0 });
 const availableTickets = ref([]);
 
-onMounted(() => { load(); loadStats(); loadTicketTypes(); });
-watch([filters, perPage], () => { pagination.value.current_page = 1; load(1); }, { deep: true });
+onMounted(() => { loadStats(); loadTicketTypes(); });
+watch([filters, perPage], () => { pagination.value.current_page = 1; load(1); }, { deep: true, immediate: true });
 
 async function load(p = 1) {
     loading.value  = true;

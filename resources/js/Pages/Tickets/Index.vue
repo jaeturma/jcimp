@@ -60,8 +60,31 @@ const svMessage     = ref('');
 const svLoading     = ref(false);
 const svPendingEmail = ref('');        // email for polling pending status
 
+// ── Student verification session persistence ────────────────────────────────
+function storeSvSession(token, type) {
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    sessionStorage.setItem('sv_verification', JSON.stringify({ token, type, expires_at: expiresAt }));
+}
+
+function restoreSvSession() {
+    try {
+        const raw = sessionStorage.getItem('sv_verification');
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed.token && parsed.expires_at && new Date(parsed.expires_at) > new Date()) {
+            svAccessToken.value = parsed.token;
+            svType.value        = parsed.type;
+        } else {
+            sessionStorage.removeItem('sv_verification');
+        }
+    } catch {
+        sessionStorage.removeItem('sv_verification');
+    }
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────────
 onMounted(async () => {
+    restoreSvSession();
     try {
         const [ticketRes, verifyRes] = await Promise.all([
             axios.get('/api/tickets', { params: { event_id: props.eventId } }),
@@ -69,10 +92,6 @@ onMounted(async () => {
         ]);
         tickets.value       = ticketRes.data.tickets;
         studentStatus.value = verifyRes.data;
-
-        // If logged-in user is already verified, pre-populate svAccessToken
-        // via the send-otp endpoint so they skip the modal for in-session use
-        // (actual token is fetched lazily when they click a student ticket)
     } catch {
         pageError.value = 'Failed to load tickets. Please refresh the page.';
     } finally {
@@ -224,6 +243,11 @@ async function reserveAll() {
 }
 
 function proceedToCheckout() {
+    localStorage.setItem('ticket_cart', JSON.stringify({
+        items:      cart.value,
+        email:      email.value,
+        expires_at: expiresAt.value,
+    }));
     router.visit(route('tickets.checkout'), {
         method: 'get',
         data: {
@@ -289,6 +313,7 @@ async function svSendOtp() {
         if (data.status === 'approved') {
             svAccessToken.value = data.access_token;
             svType.value        = data.student_type;
+            storeSvSession(data.access_token, data.student_type);
             svStep.value        = 'approved';
             svMessage.value     = 'You are already verified. You can now add the ticket to your cart.';
             return;
@@ -334,6 +359,7 @@ async function svVerifyOtp() {
         if (data.status === 'approved') {
             svAccessToken.value = data.access_token;
             svType.value        = data.student_type;
+            storeSvSession(data.access_token, data.student_type);
             svStep.value        = 'approved';
             svMessage.value     = data.message;
             if (!email.value.trim()) email.value = svEmail.value;
@@ -359,6 +385,7 @@ async function svCheckStatus() {
         if (data.status === 'approved') {
             svAccessToken.value = data.access_token;
             svType.value        = data.student_type;
+            storeSvSession(data.access_token, data.student_type);
             svStep.value        = 'approved';
             svMessage.value     = 'Your student verification has been approved! You can now add the ticket to your cart.';
             if (!email.value.trim()) email.value = svPendingEmail.value;

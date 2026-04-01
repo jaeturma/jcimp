@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
+import axios from 'axios';
 import {
     CSidebar, CSidebarBrand, CSidebarNav, CSidebarToggler,
     CNavItem, CNavTitle,
@@ -37,6 +38,53 @@ watch(() => page.url, (newUrl) => {
 });
 
 function logout() { router.post(route('logout')); }
+
+// ── Saved cart (restore purchase) ─────────────────────────────────────────────
+const savedCart = ref(null);
+
+function readSavedCart() {
+    try {
+        const raw = localStorage.getItem('ticket_cart');
+        if (!raw) { savedCart.value = null; return; }
+        const data = JSON.parse(raw);
+        if (!data.expires_at || new Date(data.expires_at) <= new Date()) {
+            localStorage.removeItem('ticket_cart');
+            savedCart.value = null;
+        } else {
+            savedCart.value = data;
+        }
+    } catch {
+        savedCart.value = null;
+    }
+}
+
+function restoreCart() {
+    if (!savedCart.value) return;
+    router.visit(route('tickets.checkout'), {
+        method: 'get',
+        data: {
+            email:      savedCart.value.email,
+            expires_at: savedCart.value.expires_at,
+            items:      JSON.stringify(savedCart.value.items),
+        },
+    });
+}
+
+const cancelling = ref(false);
+async function cancelCart() {
+    if (!savedCart.value) return;
+    cancelling.value = true;
+    try {
+        await axios.delete('/api/cart/reserve', { data: { email: savedCart.value.email } });
+    } catch { /* best-effort */ } finally {
+        localStorage.removeItem('ticket_cart');
+        savedCart.value = null;
+        cancelling.value = false;
+    }
+}
+
+onMounted(readSavedCart);
+watch(() => page.url, readSavedCart);
 
 const roleBadgeColor = computed(() => {
     const r = userRole.value;
@@ -245,23 +293,62 @@ const roleBadgeColor = computed(() => {
                 <div class="flex-grow-1" />
 
                 <CHeaderNav class="align-items-center gap-2">
-                    <CBadge
-                        v-if="userRole && !isGuest"
-                        :color="roleBadgeColor"
-                        shape="rounded-pill"
-                        class="text-capitalize fw-semibold px-2 py-1"
-                        style="font-size:.7rem"
-                    >
-                        {{ userRole.replace('_', ' ') }}
-                    </CBadge>
+
+                    <!-- Cart dropdown — always visible -->
+                    <CDropdown variant="nav-item" placement="bottom-end">
+                        <CDropdownToggle :caret="false" class="position-relative p-1" title="Cart">
+                            <CIcon icon="cil-cart" size="lg" class="text-dark" />
+                            <CBadge
+                                v-if="savedCart"
+                                color="danger"
+                                shape="rounded-pill"
+                                class="position-absolute top-0 start-100 translate-middle"
+                                style="font-size:.6rem;padding:2px 5px;"
+                            >
+                                {{ savedCart.items.reduce((s, i) => s + i.quantity, 0) }}
+                            </CBadge>
+                        </CDropdownToggle>
+                        <CDropdownMenu style="min-width:240px;">
+                            <template v-if="savedCart">
+                                <CDropdownItem disabled class="small text-muted fw-semibold">Pending Checkout</CDropdownItem>
+                                <CDropdownItem disabled class="py-0">
+                                    <ul class="mb-0 ps-3 small text-body" style="font-size:.78rem;">
+                                        <li v-for="(item, i) in savedCart.items" :key="i">
+                                            {{ item.quantity }}× {{ item.ticket_name }}
+                                        </li>
+                                    </ul>
+                                </CDropdownItem>
+                                <CDropdownDivider />
+                                <CDropdownItem @click="restoreCart" class="fw-semibold text-primary" style="cursor:pointer;">
+                                    <CIcon icon="cil-cart" class="me-2" /> Resume Checkout
+                                </CDropdownItem>
+                                <CDropdownItem
+                                    @click="cancelCart"
+                                    class="text-danger"
+                                    style="cursor:pointer;"
+                                    :class="{ 'opacity-50 pe-none': cancelling }"
+                                >
+                                    <CIcon icon="cil-x-circle" class="me-2" />
+                                    {{ cancelling ? 'Cancelling…' : 'Cancel Order' }}
+                                </CDropdownItem>
+                            </template>
+                            <template v-else>
+                                <CDropdownItem disabled class="small text-muted text-center py-3">
+                                    No pending cart
+                                </CDropdownItem>
+                                <CDropdownItem :href="route('tickets.index')" class="fw-semibold" style="cursor:pointer;">
+                                    <CIcon icon="cil-tag" class="me-2" /> Buy Tickets
+                                </CDropdownItem>
+                            </template>
+                        </CDropdownMenu>
+                    </CDropdown>
 
                     <template v-if="!isGuest">
                         <CDropdown variant="nav-item" placement="bottom-end">
-                            <CDropdownToggle :caret="false" class="py-0 px-1 d-flex align-items-center gap-2">
+                            <CDropdownToggle :caret="false" class="py-0 px-1">
                                 <CAvatar color="primary" text-color="white" size="sm" class="fw-bold" style="font-size:.8rem">
                                     {{ userName.charAt(0).toUpperCase() }}
                                 </CAvatar>
-                                <span class="d-none d-md-block small fw-semibold">{{ userName }}</span>
                             </CDropdownToggle>
                             <CDropdownMenu>
                                 <CDropdownItem disabled class="small text-muted">{{ userName }}</CDropdownItem>

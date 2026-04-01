@@ -20,15 +20,22 @@ class Ticket extends Model
         'max_per_user',
         'requires_verification',
         'gcash_qr',
+        'secondary_qr',
         'ticket_image',
     ];
 
-    protected $appends = ['ticket_image_url'];
+    protected $appends = ['ticket_image_url', 'secondary_qr_url'];
 
     public function getTicketImageUrlAttribute(): ?string
     {
         if (! $this->ticket_image) return null;
         return \Illuminate\Support\Facades\Storage::disk('public')->url($this->ticket_image);
+    }
+
+    public function getSecondaryQrUrlAttribute(): ?string
+    {
+        if (! $this->secondary_qr) return null;
+        return \Illuminate\Support\Facades\Storage::disk('public')->url($this->secondary_qr);
     }
 
     protected $casts = [

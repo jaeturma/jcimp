@@ -64,18 +64,10 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Upload manual payment proof with automatic OCR extraction.
+     * Upload manual payment proof.
      *
      * POST /api/checkout/proof
-     * Body: { order_reference, proof_image, transaction_number?, transaction_amount? }
-     *
-     * If transaction details are not provided, the system will attempt to extract
-     * them automatically using OCR (Optical Character Recognition).
-     *
-     * Response includes:
-     * - OCR extraction result
-     * - Confidence score
-     * - Extracted transaction details (if successful)
+     * Body: { order_reference, proof_image }
      */
     public function uploadProof(SubmitManualPaymentRequest $request): JsonResponse
     {
@@ -87,39 +79,13 @@ class CheckoutController extends Controller
             return response()->json(['message' => 'Order cannot accept a proof at this stage.'], 422);
         }
 
-        // Check that OTP was verified (order status should be 'otp_verified')
-        if ($order->status !== 'otp_verified' && $order->status !== 'pending') {
-            return response()->json([
-                'message' => 'Please verify your OTP before submitting payment proof.',
-            ], 422);
-        }
+        $manualPayment = $this->paymentService->submitManualProof($order, $request->file('proof_image'));
 
-        $manualPayment = $this->paymentService->submitManualProof(
-            order:               $order,
-            file:                $request->file('proof_image'),
-            transactionNumber:   $request->string('transaction_number')->value(),
-            transactionAmount:   $request->string('transaction_amount')->value()
-        );
-
-        // Prepare response with OCR results
-        $response = [
-            'message' => 'Payment proof submitted successfully. Awaiting admin review.',
-            'order_id' => $order->id,
+        return response()->json([
+            'message'           => 'Payment proof submitted successfully. Awaiting admin review.',
+            'order_id'          => $order->id,
             'manual_payment_id' => $manualPayment->id,
-            'ocr_extraction' => [
-                'extracted' => $manualPayment->ocr_extracted,
-                'confidence' => $manualPayment->ocr_confidence,
-                'transaction_number' => $manualPayment->transaction_number,
-                'transaction_amount' => $manualPayment->transaction_amount ? (float) $manualPayment->transaction_amount : null,
-            ],
-        ];
-
-        // If OCR confidence is low, warn the user that manual verification may be needed
-        if ($manualPayment->ocr_extracted && $manualPayment->ocr_confidence && $manualPayment->ocr_confidence < 75) {
-            $response['warning'] = 'OCR extraction had low confidence. Admin will verify the transaction details.';
-        }
-
-        return response()->json($response);
+        ]);
     }
 
     /**
@@ -255,6 +221,9 @@ class CheckoutController extends Controller
                 'type'        => $ticket->type,
                 'gcash_qr_url' => $ticket->gcash_qr
                     ? Storage::disk('public')->url($ticket->gcash_qr)
+                    : null,
+            'secondary_qr_url' => $ticket->secondary_qr
+                    ? Storage::disk('public')->url($ticket->secondary_qr)
                     : null,
             ],
             'event' => [

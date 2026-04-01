@@ -25,7 +25,7 @@ class ManualPaymentController extends Controller
 
         $perPage = min((int) $request->input('per_page', 20), 100);
 
-        $payments = ManualPayment::with(['order'])
+        $payments = ManualPayment::with(['order.items'])
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
             ->when($request->search, fn ($q) => $q->whereHas('order', fn ($oq) => $oq
                 ->where('email', 'like', '%' . $request->search . '%')
@@ -75,7 +75,7 @@ class ManualPaymentController extends Controller
             return response()->json(['message' => 'This payment has already been reviewed.'], 422);
         }
 
-        if ($request->string('action') === 'approve') {
+        if ($request->input('action') === 'approve') {
             $this->paymentService->approveManualPayment($manualPayment, $request->user()->id);
             return response()->json(['message' => 'Payment approved. Tickets will be generated.']);
         }

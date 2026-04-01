@@ -94,8 +94,27 @@ Route::get('/tickets/checkout', function () {
     $items     = json_decode(request()->input('items', '[]'), true) ?? [];
     $expiresAt = request()->input('expires_at', '');
 
+    // Enrich each cart item with the gcash_qr_url for its ticket tier
+    if (! empty($items)) {
+        $ticketIds = array_unique(array_column($items, 'ticket_id'));
+        $tickets   = \App\Models\Ticket::whereIn('id', $ticketIds)
+            ->get(['id', 'gcash_qr', 'secondary_qr'])
+            ->keyBy('id');
+
+        $items = array_map(function ($item) use ($tickets) {
+            $ticket = $tickets[$item['ticket_id']] ?? null;
+            $item['gcash_qr_url'] = $ticket?->gcash_qr
+                ? \Illuminate\Support\Facades\Storage::disk('public')->url($ticket->gcash_qr)
+                : null;
+            $item['secondary_qr_url'] = $ticket?->secondary_qr
+                ? \Illuminate\Support\Facades\Storage::disk('public')->url($ticket->secondary_qr)
+                : null;
+            return $item;
+        }, $items);
+    }
+
     return Inertia::render('Tickets/Checkout', [
-        'cartItems' => $items,      // [{ticket_id, ticket_name, ticket_type, quantity, price}]
+        'cartItems' => $items,
         'email'     => request()->input('email', ''),
         'expiresAt' => $expiresAt,
     ]);
@@ -146,20 +165,31 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('/tickets',       fn () => Inertia::render('Admin/Tickets'))->name('admin.tickets');
     Route::get('/payments',      fn () => Inertia::render('Admin/Payments'))->name('admin.payments');
     Route::get('/settings', function () {
+        // Parse .env directly so values are always fresh regardless of config cache
+        $env = [];
+        if (file_exists(base_path('.env'))) {
+            foreach (file(base_path('.env'), FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+                if (str_starts_with(trim($line), '#') || ! str_contains($line, '=')) continue;
+                [$k, $v] = explode('=', $line, 2);
+                $env[trim($k)] = trim(trim($v), '"');
+            }
+        }
+        $nullify = fn ($v) => ($v === 'null' || $v === '') ? '' : $v;
+
         return Inertia::render('Admin/Settings', [
             'smtpSettings' => [
-                'enabled'      => env('MAIL_ENABLED', false),
-                'host'         => config('mail.mailers.smtp.host', ''),
-                'port'         => config('mail.mailers.smtp.port', 587),
-                'username'     => config('mail.mailers.smtp.username', ''),
-                'scheme'       => config('mail.mailers.smtp.scheme', 'null'),
-                'from_address' => config('mail.from.address', ''),
-                'from_name'    => config('mail.from.name', ''),
+                'enabled'      => ($env['MAIL_ENABLED'] ?? 'false') === 'true',
+                'host'         => $nullify($env['MAIL_HOST']         ?? ''),
+                'port'         => (int) ($env['MAIL_PORT']           ?? 587),
+                'username'     => $nullify($env['MAIL_USERNAME']     ?? ''),
+                'scheme'       => $nullify($env['MAIL_SCHEME']       ?? 'tls'),
+                'from_address' => $nullify($env['MAIL_FROM_ADDRESS'] ?? ''),
+                'from_name'    => $nullify($env['MAIL_FROM_NAME']    ?? ''),
                 // password intentionally omitted
             ],
             'recaptchaSettings' => [
-                'enabled'  => env('RECAPTCHA_ENABLED', false),
-                'site_key' => config('services.recaptcha.site_key', ''),
+                'enabled'  => ($env['RECAPTCHA_ENABLED'] ?? 'false') === 'true',
+                'site_key' => $env['RECAPTCHA_SITE_KEY'] ?? '',
             ],
         ]);
     })->name('admin.settings');

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import axios from 'axios';
@@ -115,8 +115,7 @@ const sendErrors = ref({});
 const sending = ref(false);
 const sendSuccess = ref('');
 
-onMounted(() => load());
-watch([filters, perPage], () => { pagination.value.current_page = 1; load(1); }, { deep: true });
+watch([filters, perPage], () => { pagination.value.current_page = 1; load(1); }, { deep: true, immediate: true });
 
 async function load(page = 1) {
     loading.value = true;

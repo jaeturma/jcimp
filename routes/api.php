@@ -44,7 +44,8 @@ Route::middleware('throttle:60,1')->group(function () {
 
     // Bulk cart reservation — reserves all items in one call (all-or-nothing)
     Route::post('/cart/reserve', [ReservationController::class, 'reserveCart'])
-        ->middleware('throttle:10,1');
+        ->middleware('throttle:30,1');
+    Route::delete('/cart/reserve', [ReservationController::class, 'cancelCart']);
 
     // Legacy single-ticket reservation (kept for compatibility)
     Route::post('/reservations', [ReservationController::class, 'store'])
@@ -57,11 +58,11 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::post('/checkout/verify-otp', [PaymentOtpController::class, 'verify'])
         ->middleware('throttle:10,1');
     Route::post('/checkout/proof', [CheckoutController::class, 'uploadProof'])
-        ->middleware('throttle:5,1');
+        ->middleware('throttle:30,1');
 
     // Quick buy: Step 1 — reserve, Step 2 — pay
     Route::post('/checkout/quick-reserve', [CheckoutController::class, 'quickReserve'])
-        ->middleware('throttle:5,1');
+        ->middleware('throttle:30,1');
     Route::get('/checkout/quick-pay/{token}',  [CheckoutController::class, 'quickPayInfo']);
     Route::post('/checkout/quick-pay/{token}', [CheckoutController::class, 'quickPay'])
         ->middleware('throttle:5,1');
@@ -131,6 +132,10 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::post('/tickets/{ticket}/qr', [AdminTicketController::class, 'uploadQr'])
         ->middleware('permission:update tickets');
     Route::delete('/tickets/{ticket}/qr', [AdminTicketController::class, 'removeQr'])
+        ->middleware('permission:update tickets');
+    Route::post('/tickets/{ticket}/secondary-qr', [AdminTicketController::class, 'uploadSecondaryQr'])
+        ->middleware('permission:update tickets');
+    Route::delete('/tickets/{ticket}/secondary-qr', [AdminTicketController::class, 'removeSecondaryQr'])
         ->middleware('permission:update tickets');
     Route::post('/tickets/{ticket}/image', [AdminTicketController::class, 'uploadTicketImage'])
         ->middleware('permission:update tickets');

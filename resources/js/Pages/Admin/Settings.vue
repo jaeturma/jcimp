@@ -10,67 +10,6 @@ const props = defineProps({
 });
 const page = usePage();
 
-// ── SMTP ──────────────────────────────────────────────────────────────────────
-const smtpEnabled = ref(
-    props.smtpSettings.enabled === true || props.smtpSettings.enabled === 'true'
-);
-const smtp = ref({
-    host:         props.smtpSettings.host         ?? '',
-    port:         props.smtpSettings.port         ?? 587,
-    username:     props.smtpSettings.username     ?? '',
-    password:     '',   // never pre-filled
-    scheme:       props.smtpSettings.scheme       ?? 'tls',
-    from_address: props.smtpSettings.from_address ?? '',
-    from_name:    props.smtpSettings.from_name    ?? '',
-});
-
-const smtpSaving  = ref(false);
-const smtpSuccess = ref('');
-const smtpError   = ref('');
-const smtpErrors  = ref({});
-
-function onSchemeChange() {
-    if (smtp.value.scheme === 'ssl')       smtp.value.port = 465;
-    else if (smtp.value.scheme === 'tls')  smtp.value.port = 587;
-    else                                   smtp.value.port = 25;
-}
-
-async function saveSmtp() {
-    smtpSuccess.value = '';
-    smtpError.value   = '';
-    smtpErrors.value  = {};
-
-    smtpSaving.value = true;
-    try {
-        const payload = {
-            enabled:      smtpEnabled.value,
-            from_address: smtp.value.from_address,
-            from_name:    smtp.value.from_name,
-        };
-
-        if (smtpEnabled.value) {
-            payload.host     = smtp.value.host;
-            payload.port     = smtp.value.port;
-            payload.scheme   = smtp.value.scheme;
-            payload.username = smtp.value.username;
-            if (smtp.value.password) payload.password = smtp.value.password;
-        }
-
-        const res = await axios.post('/api/admin/settings/smtp', payload);
-        smtpSuccess.value   = res.data.message ?? 'Saved.';
-        smtp.value.password = '';
-    } catch (e) {
-        if (e.response?.status === 422) {
-            smtpErrors.value = e.response.data.errors ?? {};
-            smtpError.value  = e.response.data.message ?? 'Validation failed.';
-        } else {
-            smtpError.value = e.response?.data?.message ?? 'Failed to save.';
-        }
-    } finally {
-        smtpSaving.value = false;
-    }
-}
-
 // ── Send Test Email ───────────────────────────────────────────────────────────
 const testTo      = ref(page.props.auth?.user?.email ?? '');
 const testSending = ref(false);
@@ -142,177 +81,69 @@ async function saveRecaptcha() {
         <CRow>
             <CCol xs="12" lg="8" xl="7">
 
-                <!-- ── Email / SMTP ─────────────────────────────────────── -->
-                <CCard class="mb-4">
-                    <CCardHeader class="d-flex align-items-center justify-content-between">
-                        <span class="fw-semibold d-flex align-items-center gap-2">
-                            <CIcon customClassName="nav-icon" icon="cil-envelope-closed" />
-                            Email (SMTP) Configuration
-                        </span>
-                        <!-- Enable toggle -->
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="small text-muted">{{ smtpEnabled ? 'Enabled' : 'Disabled' }}</span>
-                            <CFormSwitch
-                                v-model="smtpEnabled"
-                                :color="smtpEnabled ? 'success' : 'secondary'"
-                                size="lg"
-                            />
-                        </div>
-                    </CCardHeader>
-                    <CCardBody>
-
-                        <!-- Current status banner -->
-                        <div class="mb-4 p-3 rounded d-flex align-items-center gap-3"
-                            style="background:var(--cui-tertiary-bg,#f0f4f8)">
-                            <CBadge :color="smtpEnabled ? 'success' : 'secondary'" class="px-3 py-2">
-                                {{ smtpEnabled ? 'SMTP Active' : 'Disabled (log only)' }}
-                            </CBadge>
-                            <span class="small text-muted">
-                                From: <strong>{{ smtpSettings.from_name || '—' }}</strong>
-                                &lt;{{ smtpSettings.from_address || '—' }}&gt;
-                            </span>
-                        </div>
-
-                        <!-- Disabled notice -->
-                        <CAlert v-if="!smtpEnabled" color="warning" class="mb-4">
-                            <strong>Email is disabled.</strong>
-                            Emails will be written to the log file only. Enable SMTP to send real emails.
-                        </CAlert>
-
-                        <!-- SMTP fields — only when enabled -->
-                        <transition name="slide">
-                            <div v-if="smtpEnabled">
-                                <CRow class="g-3 mb-3">
-                                    <CCol xs="12" sm="8">
-                                        <CFormLabel class="fw-semibold">
-                                            SMTP Host <span class="text-danger">*</span>
-                                        </CFormLabel>
-                                        <CFormInput
-                                            v-model="smtp.host"
-                                            placeholder="smtp.gmail.com"
-                                            autocomplete="off"
-                                            :invalid="!!smtpErrors.host"
-                                        />
-                                        <CFormFeedback invalid v-if="smtpErrors.host">{{ smtpErrors.host[0] }}</CFormFeedback>
-                                    </CCol>
-                                    <CCol xs="12" sm="4">
-                                        <CFormLabel class="fw-semibold">
-                                            Port <span class="text-danger">*</span>
-                                        </CFormLabel>
-                                        <CFormInput
-                                            v-model.number="smtp.port"
-                                            type="number"
-                                            placeholder="587"
-                                            min="1" max="65535"
-                                            :invalid="!!smtpErrors.port"
-                                        />
-                                        <CFormFeedback invalid v-if="smtpErrors.port">{{ smtpErrors.port[0] }}</CFormFeedback>
-                                    </CCol>
-                                </CRow>
-
-                                <div class="mb-3">
-                                    <CFormLabel class="fw-semibold">Encryption</CFormLabel>
-                                    <CFormSelect v-model="smtp.scheme" @change="onSchemeChange">
-                                        <option value="tls">TLS (port 587 — recommended)</option>
-                                        <option value="ssl">SSL (port 465)</option>
-                                        <option value="null">None (port 25)</option>
-                                    </CFormSelect>
-                                </div>
-
-                                <CRow class="g-3 mb-4">
-                                    <CCol xs="12" sm="6">
-                                        <CFormLabel class="fw-semibold">SMTP Username</CFormLabel>
-                                        <CFormInput
-                                            v-model="smtp.username"
-                                            type="email"
-                                            placeholder="you@gmail.com"
-                                            autocomplete="off"
-                                        />
-                                    </CCol>
-                                    <CCol xs="12" sm="6">
-                                        <CFormLabel class="fw-semibold">SMTP Password</CFormLabel>
-                                        <CFormInput
-                                            v-model="smtp.password"
-                                            type="password"
-                                            placeholder="Leave blank to keep current"
-                                            autocomplete="new-password"
-                                        />
-                                        <div class="form-text">Leave blank to keep the existing password.</div>
-                                    </CCol>
-                                </CRow>
-                            </div>
-                        </transition>
-
-                        <!-- From address / name (always shown) -->
-                        <CRow class="g-3 mb-4">
-                            <CCol xs="12" sm="6">
-                                <CFormLabel class="fw-semibold">
-                                    From Address <span class="text-danger">*</span>
-                                </CFormLabel>
-                                <CFormInput
-                                    v-model="smtp.from_address"
-                                    type="email"
-                                    placeholder="noreply@yourdomain.com"
-                                    :invalid="!!smtpErrors.from_address"
-                                />
-                                <CFormFeedback invalid v-if="smtpErrors.from_address">{{ smtpErrors.from_address[0] }}</CFormFeedback>
-                                <div class="form-text">Sender address shown in the user's inbox.</div>
-                            </CCol>
-                            <CCol xs="12" sm="6">
-                                <CFormLabel class="fw-semibold">
-                                    From Name <span class="text-danger">*</span>
-                                </CFormLabel>
-                                <CFormInput
-                                    v-model="smtp.from_name"
-                                    placeholder="Concert Ticketing"
-                                    :invalid="!!smtpErrors.from_name"
-                                />
-                                <CFormFeedback invalid v-if="smtpErrors.from_name">{{ smtpErrors.from_name[0] }}</CFormFeedback>
-                            </CCol>
-                        </CRow>
-
-                        <CAlert v-if="smtpSuccess" color="success" class="py-2 mb-3">{{ smtpSuccess }}</CAlert>
-                        <CAlert v-if="smtpError"   color="danger"  class="py-2 mb-3">{{ smtpError }}</CAlert>
-
-                        <CButton color="primary" :disabled="smtpSaving" @click="saveSmtp">
-                            <CSpinner v-if="smtpSaving" size="sm" class="me-2" />
-                            {{ smtpSaving ? 'Saving…' : 'Save Email Settings' }}
-                        </CButton>
-
-                    </CCardBody>
-                </CCard>
-
-                <!-- ── Send Test Email ──────────────────────────────────── -->
+                <!-- ── Email Template ──────────────────────────────────── -->
                 <CCard class="mb-4">
                     <CCardHeader class="fw-semibold d-flex align-items-center gap-2">
-                        <CIcon customClassName="nav-icon" icon="cil-send" />
-                        Send Test Email
+                        <CIcon customClassName="nav-icon" icon="cil-envelope-letter" />
+                        Email Template
                     </CCardHeader>
                     <CCardBody>
-                        <CAlert v-if="!smtpEnabled" color="warning" class="mb-3 py-2">
-                            SMTP is currently disabled. Enable it above before sending a test email.
-                        </CAlert>
+
+                        <!-- Template preview -->
+                        <div class="border rounded overflow-hidden mb-4" style="font-family:Arial,sans-serif;font-size:13px;">
+                            <!-- Header -->
+                            <div style="background:#1a1a2e;padding:20px 28px;text-align:center;">
+                                <div style="color:#d4af37;font-size:16px;font-weight:bold;letter-spacing:1px;">
+                                    {{ smtpSettings.from_name || 'Your Event Name' }}
+                                </div>
+                                <div style="color:#aaa;font-size:11px;margin-top:4px;">Ticketing System</div>
+                            </div>
+                            <!-- Body preview -->
+                            <div style="padding:20px 28px;background:#fff;">
+                                <div style="margin-bottom:10px;">
+                                    <span style="background:#d4e8ff;color:#0055a5;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:bold;">
+                                        eTICKET — 1 ENTRY
+                                    </span>
+                                </div>
+                                <div style="font-size:14px;font-weight:bold;margin-bottom:6px;color:#1a1a2e;">Your Event — Ticket Tier</div>
+                                <div style="font-size:22px;font-weight:bold;font-family:monospace;margin-bottom:6px;">EF1234567890</div>
+                                <div style="color:#666;font-size:12px;">attendee@example.com</div>
+                                <div style="color:#666;font-size:12px;margin-top:2px;">Apr 1, 2026 &nbsp;·&nbsp; ORD-XXXX</div>
+                                <div style="margin-top:14px;text-align:right;">
+                                    <div style="display:inline-block;background:#f0f0f0;width:64px;height:64px;border-radius:4px;line-height:64px;text-align:center;font-size:20px;">▦</div>
+                                </div>
+                            </div>
+                            <!-- Footer -->
+                            <div style="background:#f4f4f7;padding:10px 28px;text-align:center;color:#999;font-size:11px;">
+                                {{ smtpSettings.from_address || 'noreply@yourdomain.com' }} &mdash; Automated ticket delivery
+                            </div>
+                        </div>
+
                         <p class="small text-muted mb-3">
-                            Send a test message to verify your SMTP configuration is working.
+                            The ticket email above is sent automatically when an order is paid. It includes the event name, ticket tier, ticket number, QR code, and attendee details.
                         </p>
+
+                        <hr class="my-3" />
+
+                        <!-- Test send -->
+                        <div class="fw-semibold mb-2 small">Send a Test Email</div>
                         <CRow class="g-2 align-items-end">
                             <CCol xs="12" sm="8">
-                                <CFormLabel class="fw-semibold">Recipient Email</CFormLabel>
                                 <CFormInput
                                     v-model="testTo"
                                     type="email"
                                     placeholder="admin@yourdomain.com"
-                                    :disabled="!smtpEnabled"
                                 />
                             </CCol>
                             <CCol xs="12" sm="4">
                                 <CButton
-                                    color="secondary"
+                                    color="primary"
+                                    variant="outline"
                                     class="w-100"
-                                    :disabled="testSending || !smtpEnabled"
+                                    :disabled="testSending"
                                     @click="sendTestEmail"
                                 >
-                                    <CSpinner v-if="testSending" size="sm" class="me-2" />
+                                    <CSpinner v-if="testSending" size="sm" class="me-1" />
                                     {{ testSending ? 'Sending…' : 'Send Test' }}
                                 </CButton>
                             </CCol>

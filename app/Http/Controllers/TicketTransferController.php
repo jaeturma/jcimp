@@ -201,18 +201,20 @@ class TicketTransferController extends Controller
     private function formatTicket(TicketIssued $t): array
     {
         return [
-            'id'            => $t->id,
-            'qr_code'       => $t->qr_code,
-            'status'        => $t->status,
-            'holder_name'   => $t->holder_name,
-            'holder_email'  => $t->holder_email,
-            'is_for_resale' => $t->is_for_resale,
-            'resale_price'  => $t->resale_price ? (float) $t->resale_price : null,
-            'ticket_name'   => $t->ticket?->name,
-            'ticket_type'   => $t->ticket?->type,
-            'event_name'    => $t->ticket?->event?->name,
-            'order_ref'     => $t->order?->reference,
-            'used_at'       => $t->used_at?->toISOString(),
+            'id'              => $t->id,
+            'qr_code'         => $t->qr_code,
+            'status'          => $t->status,
+            'holder_name'     => $t->holder_name,
+            'holder_email'    => $t->holder_email,
+            'is_for_resale'   => $t->is_for_resale,
+            'resale_price'    => $t->resale_price ? (float) $t->resale_price : null,
+            'ticket_name'     => $t->ticket?->name,
+            'ticket_type'     => $t->ticket?->type,
+            'ticket_price'    => $t->ticket?->price ? (float) $t->ticket->price : null,
+            'event_name'      => $t->ticket?->event?->name,
+            'order_ref'       => $t->order?->reference,
+            'used_at'         => $t->used_at?->toISOString(),
+            'ticket_card_url' => $t->ticket_card_url,
         ];
     }
 }

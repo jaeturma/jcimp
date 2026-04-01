@@ -31,11 +31,15 @@ class GuestStudentController extends Controller
             }
         }
 
-        // Check for existing approved verification for this email
+        // Check for existing approved verification for this email — return token directly, no new OTP needed
         $existing = StudentVerification::where('guest_email', $email)->where('status', 'approved')->latest()->first();
         if ($existing) {
             $this->refreshToken($existing);
-            // Still require OTP re-verify for security — fall through to generate new OTP
+            return response()->json([
+                'status'       => 'approved',
+                'access_token' => $existing->fresh()->access_token,
+                'student_type' => $existing->student_type,
+            ]);
         }
 
         // Check for pending review — don't re-send OTP, just inform them
@@ -68,11 +72,32 @@ class GuestStudentController extends Controller
             'otp_expires_at' => now()->addMinutes(10),
         ]);
 
-        // Send OTP email (plain mail)
-        Mail::raw(
-            "Your student verification OTP is: {$otp}\n\nThis code expires in 10 minutes.\n\nDo not share this code.",
-            fn($m) => $m->to($email)->subject('Your Student Verification OTP — Concert Ticketing')
-        );
+        // Send OTP email (HTML)
+        $html = <<<HTML
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px;">
+  <tr><td align="center">
+    <table width="100%" style="max-width:480px;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+      <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center;">
+        <p style="margin:0;color:#ffffff;font-size:1.1rem;font-weight:700;">🎓 Student Verification</p>
+      </td></tr>
+      <tr><td style="padding:32px 32px 8px;text-align:center;">
+        <p style="margin:0 0 8px;color:#555;font-size:.95rem;">Your One-Time Password (OTP)</p>
+        <p style="margin:0;font-size:3rem;font-weight:800;letter-spacing:.35em;color:#1a1a2e;font-family:'Courier New',monospace;">{$otp}</p>
+        <p style="margin:16px 0 0;color:#888;font-size:.82rem;">This code expires in <strong>10 minutes</strong>. Do not share it with anyone.</p>
+      </td></tr>
+      <tr><td style="padding:24px 32px 32px;text-align:center;border-top:1px solid #eee;margin-top:16px;">
+        <p style="margin:0;color:#aaa;font-size:.75rem;">If you did not request this, you can safely ignore this email.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
+HTML;
+        Mail::html($html, fn($m) => $m->to($email)->subject('Your Student Verification OTP — Concert Ticketing'));
 
         return response()->json([
             'status'  => 'otp_sent',
