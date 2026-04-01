@@ -8,7 +8,7 @@ class StoreTicketRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->is_admin ?? false;
+        return $this->user()?->hasPermissionTo('create tickets') ?? false;
     }
 
     public function rules(): array

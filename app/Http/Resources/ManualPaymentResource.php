@@ -19,7 +19,7 @@ class ManualPaymentResource extends JsonResource
             'ocr_extracted'       => (bool) $this->ocr_extracted,
             'ocr_confidence'      => $this->ocr_confidence,
             'ocr_text'            => $this->when(
-                $request->user()?->is_admin,
+                $request->user()?->hasOperatorAccess(),
                 fn () => $this->ocr_text
             ),
             'reviewed_at'         => $this->reviewed_at?->toISOString(),

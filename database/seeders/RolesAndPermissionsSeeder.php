@@ -96,9 +96,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'scan tickets',
         ]);
 
-        // validator → verify students, review payments, send tickets, scan tickets
+        // validator → verify students, review payments, send tickets, scan tickets (no dashboard analytics)
         $validator->syncPermissions([
-            'view dashboard',
             'view tickets',
             'view orders',
             'update orders',

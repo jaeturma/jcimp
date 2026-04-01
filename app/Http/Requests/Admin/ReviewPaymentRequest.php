@@ -8,7 +8,7 @@ class ReviewPaymentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasAnyRole(['super_admin', 'admin']) ?? false;
+        return $this->user()?->hasPermissionTo('review manual payments') ?? false;
     }
 
     public function rules(): array

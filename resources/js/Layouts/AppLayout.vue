@@ -4,7 +4,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import {
     CSidebar, CSidebarBrand, CSidebarNav, CSidebarToggler,
-    CNavItem, CNavTitle,
+    CNavItem,
     CHeader, CHeaderToggler, CHeaderNav,
     CContainer, CDropdown, CDropdownToggle, CDropdownMenu,
     CDropdownItem, CDropdownDivider, CAvatar,
@@ -17,10 +17,8 @@ const isAdmin   = computed(() => auth.value?.isAdmin ?? false);
 const isSuperAdmin = computed(() => auth.value?.userRole === 'super_admin');
 const isManager = computed(() => auth.value?.isManager ?? false);
 const isValidator = computed(() => auth.value?.isValidator ?? false);
-const isStaff   = computed(() => auth.value?.isStaff ?? false);
 const isOperator = computed(() => auth.value?.hasOperatorAccess ?? false);
 const userName  = computed(() => auth.value?.user?.name ?? 'Guest');
-const userRole  = computed(() => auth.value?.userRole ?? '');
 
 // Start visible on desktop, hidden on mobile
 const sidebarVisible = ref(true);
@@ -86,13 +84,6 @@ async function cancelCart() {
 onMounted(readSavedCart);
 watch(() => page.url, readSavedCart);
 
-const roleBadgeColor = computed(() => {
-    const r = userRole.value;
-    if (r === 'super_admin') return 'danger';
-    if (r === 'admin')       return 'warning';
-    if (r === 'staff')       return 'info';
-    return 'secondary';
-});
 </script>
 
 <template>
@@ -195,14 +186,14 @@ const roleBadgeColor = computed(() => {
                         </Link>
                     </CNavItem>
 
-                    <CNavItem v-if="isAdmin || isManager">
+                    <CNavItem v-if="isAdmin || isManager || isValidator">
                         <Link :href="route('admin.payments')" class="nav-link">
                             <CIcon customClassName="nav-icon" icon="cil-check-circle" />
                             Payments
                         </Link>
                     </CNavItem>
 
-                    <CNavItem>
+                    <CNavItem v-if="isAdmin || isManager || isValidator">
                         <Link :href="route('admin.verifications')" class="nav-link">
                             <CIcon customClassName="nav-icon" icon="cil-shield-alt" />
                             Verifications

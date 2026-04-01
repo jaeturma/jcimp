@@ -160,7 +160,7 @@ Route::get('/admin/proof/{manualPayment}', [AdminManualPaymentController::class,
     ->name('admin.proof');
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
-    Route::get('/dashboard',     fn () => Inertia::render('Admin/Dashboard'))->name('admin.dashboard');
+    Route::get('/dashboard',     fn () => Inertia::render('Admin/Dashboard'))->name('admin.dashboard')->middleware('permission:view dashboard');
     Route::get('/events',        fn () => Inertia::render('Admin/Events'))->name('admin.events');
     Route::get('/tickets',       fn () => Inertia::render('Admin/Tickets'))->name('admin.tickets');
     Route::get('/payments',      fn () => Inertia::render('Admin/Payments'))->name('admin.payments');
