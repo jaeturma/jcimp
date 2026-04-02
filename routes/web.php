@@ -132,6 +132,10 @@ Route::get('/my-tickets', function () {
     return Inertia::render('Tickets/MyTickets');
 })->name('my-tickets');
 
+Route::get('/verify-ticket', function () {
+    return Inertia::render('Tickets/VerifyTicket');
+})->name('tickets.verify');
+
 // Quick buy step 2: payment form (opened from email link)
 Route::get('/pay/{token}', function (string $token) {
     return Inertia::render('Tickets/QuickPay', ['token' => $token]);

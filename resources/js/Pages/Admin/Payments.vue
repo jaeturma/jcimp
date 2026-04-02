@@ -89,106 +89,118 @@ const statusBadge = (s) => ({
         <div>
 
             <!-- Review Modal -->
-            <CModal :visible="!!selectedPayment" @hide="selectedPayment = null" alignment="center">
-                <CModalHeader>
-                    <CModalTitle>
+            <CModal :visible="!!selectedPayment" @hide="selectedPayment = null" alignment="center" size="xl" scrollable>
+                <CModalHeader class="bg-dark text-white">
+                    <CModalTitle class="text-white">
                         Review Payment
-                        <span class="font-monospace text-muted fs-6 ms-2">
+                        <span class="font-monospace fw-normal fs-6 ms-2 opacity-75">
                             {{ selectedPayment?.order?.reference }}
                         </span>
                     </CModalTitle>
                 </CModalHeader>
-                <CModalBody>
-                    <!-- Proof Image -->
-                    <div class="border rounded bg-body-secondary mb-4 overflow-auto text-center"
-                        style="max-height: 480px; min-height: 160px;">
-                        <img
-                            v-if="proofUrl"
-                            :src="proofUrl"
-                            alt="Payment Proof"
-                            style="width: 100%; height: auto; display: block;"
-                        />
-                        <div v-else class="text-center text-muted py-5">
-                            <CSpinner size="sm" class="me-2" />
-                            Loading proof image…
-                        </div>
-                    </div>
+                <CModalBody class="p-0">
+                    <CRow class="g-0" style="min-height: 480px;">
 
-                    <!-- Order Info -->
-                    <CRow class="g-2 mb-3 small">
-                        <CCol xs="6">
-                            <div class="p-2 rounded" style="background:var(--cui-tertiary-bg,#f0f4f8)">
-                                <div class="text-muted mb-1" style="font-size:.75rem">EMAIL</div>
-                                <div class="fw-semibold text-break">{{ selectedPayment?.order?.email }}</div>
-                            </div>
-                        </CCol>
-                        <CCol xs="6">
-                            <div class="p-2 rounded" style="background:var(--cui-tertiary-bg,#f0f4f8)">
-                                <div class="text-muted mb-1" style="font-size:.75rem">AMOUNT</div>
-                                <div class="fw-bold text-primary">₱{{ Number(selectedPayment?.order?.total_amount).toLocaleString() }}</div>
-                            </div>
-                        </CCol>
-                        <CCol xs="6">
-                            <div class="p-2 rounded" style="background:var(--cui-tertiary-bg,#f0f4f8)">
-                                <div class="text-muted mb-1" style="font-size:.75rem">SUBMITTED</div>
-                                <div>{{ selectedPayment ? new Date(selectedPayment.created_at).toLocaleString() : '' }}</div>
-                            </div>
-                        </CCol>
-                        <CCol xs="6">
-                            <div class="p-2 rounded" style="background:var(--cui-tertiary-bg,#f0f4f8)">
-                                <div class="text-muted mb-1" style="font-size:.75rem">STATUS</div>
+                        <!-- Left: Ticket details -->
+                        <CCol xs="12" md="5" class="p-4 border-end">
+
+                            <!-- Status badge -->
+                            <div class="mb-3">
                                 <CBadge
                                     :color="selectedPayment?.status === 'approved' ? 'success'
                                         : selectedPayment?.status === 'pending' ? 'warning' : 'danger'"
-                                    class="text-capitalize"
+                                    class="text-capitalize px-3 py-2"
+                                    style="font-size:.8rem"
                                 >{{ selectedPayment?.status }}</CBadge>
                             </div>
+
+                            <!-- Order info blocks -->
+                            <div class="d-flex flex-column gap-2 mb-3 small">
+                                <div class="p-2 rounded" style="background:var(--cui-tertiary-bg,#f0f4f8)">
+                                    <div class="text-muted mb-1" style="font-size:.7rem;letter-spacing:.04em">REFERENCE</div>
+                                    <div class="fw-semibold font-monospace text-break">{{ selectedPayment?.order?.reference }}</div>
+                                </div>
+                                <div class="p-2 rounded" style="background:var(--cui-tertiary-bg,#f0f4f8)">
+                                    <div class="text-muted mb-1" style="font-size:.7rem;letter-spacing:.04em">EMAIL</div>
+                                    <div class="fw-semibold text-break">{{ selectedPayment?.order?.email }}</div>
+                                </div>
+                                <div class="p-2 rounded" style="background:var(--cui-tertiary-bg,#f0f4f8)">
+                                    <div class="text-muted mb-1" style="font-size:.7rem;letter-spacing:.04em">AMOUNT</div>
+                                    <div class="fw-bold text-primary fs-5">₱{{ Number(selectedPayment?.order?.total_amount).toLocaleString() }}</div>
+                                </div>
+                                <div class="p-2 rounded" style="background:var(--cui-tertiary-bg,#f0f4f8)">
+                                    <div class="text-muted mb-1" style="font-size:.7rem;letter-spacing:.04em">SUBMITTED</div>
+                                    <div>{{ selectedPayment ? new Date(selectedPayment.created_at).toLocaleString() : '' }}</div>
+                                </div>
+                            </div>
+
+                            <!-- Tickets ordered -->
+                            <div v-if="selectedPayment?.order?.items?.length" class="mb-3">
+                                <div class="fw-semibold small text-uppercase text-muted mb-2" style="font-size:.7rem;letter-spacing:.04em">Tickets Ordered</div>
+                                <CListGroup flush class="border rounded">
+                                    <CListGroupItem
+                                        v-for="item in selectedPayment.order.items"
+                                        :key="item.id"
+                                        class="d-flex justify-content-between align-items-center py-2 small"
+                                    >
+                                        <span>
+                                            {{ item.ticket?.name ?? 'Ticket' }}
+                                            <CBadge color="secondary" class="ms-1 text-capitalize">{{ item.ticket?.type }}</CBadge>
+                                        </span>
+                                        <span class="text-muted text-nowrap ms-2">×{{ item.quantity }} — ₱{{ Number(item.price * item.quantity).toLocaleString() }}</span>
+                                    </CListGroupItem>
+                                </CListGroup>
+                            </div>
+
+                            <!-- Reviewed info -->
+                            <CAlert v-if="selectedPayment?.status === 'rejected' && selectedPayment?.rejection_reason" color="danger" class="py-2 small mb-3">
+                                <strong>Rejection reason:</strong> {{ selectedPayment.rejection_reason }}
+                            </CAlert>
+                            <CAlert v-if="selectedPayment?.status === 'approved'" color="success" class="py-2 small mb-3">
+                                ✅ Approved — ticket email sent.
+                            </CAlert>
+
+                            <!-- Rejection reason input -->
+                            <div v-if="selectedPayment?.status === 'pending'">
+                                <CFormLabel class="small">Rejection Reason <span class="text-muted">(required if rejecting)</span></CFormLabel>
+                                <CFormTextarea
+                                    v-model="rejectionReason"
+                                    rows="2"
+                                    placeholder="e.g. Screenshot does not match the order amount"
+                                />
+                            </div>
                         </CCol>
+
+                        <!-- Right: Proof image (scrollable) -->
+                        <CCol xs="12" md="7" class="d-flex flex-column">
+                            <div class="px-3 pt-3 pb-1 small text-muted fw-semibold text-uppercase border-bottom" style="font-size:.7rem;letter-spacing:.04em">
+                                Payment Proof
+                            </div>
+                            <div class="flex-grow-1 overflow-auto p-2" style="max-height: 560px; background:#f8f9fa;">
+                                <img
+                                    v-if="proofUrl"
+                                    :src="proofUrl"
+                                    alt="Payment Proof"
+                                    style="width:100%;height:auto;display:block;border-radius:4px;"
+                                />
+                                <div v-else class="d-flex align-items-center justify-content-center h-100 text-muted py-5">
+                                    <div class="text-center">
+                                        <CSpinner size="sm" class="me-2" />
+                                        Loading proof image…
+                                    </div>
+                                </div>
+                            </div>
+                        </CCol>
+
                     </CRow>
-
-                    <!-- Tickets ordered -->
-                    <div v-if="selectedPayment?.order?.items?.length" class="mb-3">
-                        <div class="fw-semibold small mb-2">Tickets Ordered</div>
-                        <CListGroup flush>
-                            <CListGroupItem
-                                v-for="item in selectedPayment.order.items"
-                                :key="item.id"
-                                class="d-flex justify-content-between align-items-center py-2 small"
-                            >
-                                <span>
-                                    {{ item.ticket?.name ?? 'Ticket' }}
-                                    <CBadge color="secondary" class="ms-1 text-capitalize">{{ item.ticket?.type }}</CBadge>
-                                </span>
-                                <span class="text-muted">×{{ item.quantity }} — ₱{{ Number(item.price * item.quantity).toLocaleString() }}</span>
-                            </CListGroupItem>
-                        </CListGroup>
-                    </div>
-
-                    <!-- Reviewed info (non-pending) -->
-                    <CAlert v-if="selectedPayment?.status === 'rejected' && selectedPayment?.rejection_reason" color="danger" class="py-2 small mb-3">
-                        <strong>Rejection reason:</strong> {{ selectedPayment.rejection_reason }}
-                    </CAlert>
-                    <CAlert v-if="selectedPayment?.status === 'approved'" color="success" class="py-2 small mb-3">
-                        ✅ Payment approved — ticket email has been sent to the customer.
-                    </CAlert>
-
-                    <!-- Rejection Reason input (pending only) -->
-                    <div v-if="selectedPayment?.status === 'pending'" class="mb-1">
-                        <CFormLabel class="small">Rejection Reason <span class="text-muted">(required if rejecting)</span></CFormLabel>
-                        <CFormTextarea
-                            v-model="rejectionReason"
-                            rows="2"
-                            placeholder="e.g. Screenshot does not match the order amount"
-                        />
-                    </div>
                 </CModalBody>
-                <CModalFooter>
+                <CModalFooter class="bg-light border-top">
                     <template v-if="selectedPayment?.status === 'pending'">
                         <CButton
                             color="success"
                             :disabled="reviewing"
                             @click="review('approve')"
-                            class="flex-grow-1"
+                            class="flex-grow-1 text-white"
                         >
                             <CSpinner v-if="reviewing" size="sm" class="me-1" />
                             ✅ Approve &amp; Send Ticket
@@ -197,12 +209,12 @@ const statusBadge = (s) => ({
                             color="danger"
                             :disabled="reviewing"
                             @click="review('reject')"
-                            class="flex-grow-1"
+                            class="flex-grow-1 text-white"
                         >
                             ❌ Reject
                         </CButton>
                     </template>
-                    <CButton color="secondary" variant="outline" @click="selectedPayment = null">
+                    <CButton color="dark" @click="selectedPayment = null" class="text-white">
                         Close
                     </CButton>
                 </CModalFooter>

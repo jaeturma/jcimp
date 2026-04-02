@@ -32,10 +32,11 @@ const cart  = ref([]);
 const email = ref(page.props.auth?.user?.email ?? '');
 
 // ── Reservation ───────────────────────────────────────────────────────────────
-const reserved     = ref(false);
-const expiresAt    = ref(null);
-const reserving    = ref(false);
-const reserveError = ref('');
+const reserved              = ref(false);
+const expiresAt             = ref(null);
+const reserving             = ref(false);
+const reserveError          = ref('');
+const studentEmailConflict  = ref(false);
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
 const secondsLeft = ref(0);
@@ -52,7 +53,6 @@ const svEmail       = ref(page.props.auth?.user?.email ?? '');
 const svOtp         = ref('');
 const svLrn         = ref('');
 const svIdFile      = ref(null);
-const svSvId        = ref(null);       // student_verification.id returned after OTP verify
 const svType        = ref(null);       // 'college' | 'highschool'
 const svAccessToken = ref(null);       // stored in memory after full approval
 const svError       = ref('');
@@ -131,13 +131,6 @@ const formattedDate = computed(() => {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
 });
-
-const ticketColor = (t) => {
-    if (inCart(t))   return 'success';
-    if (t.sold_out)  return 'secondary';
-    if (t.type === 'student') return 'info';
-    return 'warning';
-};
 
 // Show add-to-cart panel when a ticket is selected AND (non-student OR student is verified via svAccessToken OR logged-in verified)
 const showAddPanel = computed(() => {
@@ -236,10 +229,31 @@ async function reserveAll() {
         tick();
         timerHandle = setInterval(tick, 1000);
     } catch (e) {
-        reserveError.value = e.response?.data?.message ?? 'Could not reserve. Please try again.';
+        const msg = e.response?.data?.message ?? 'Could not reserve. Please try again.';
+        reserveError.value = msg;
+        if (msg.includes('already has a student ticket')) {
+            studentEmailConflict.value = true;
+        }
     } finally {
         reserving.value = false;
     }
+}
+
+function changeStudentEmail() {
+    // Clear current session and reopen verification modal with blank email
+    svAccessToken.value = null;
+    svType.value        = null;
+    svEmail.value       = '';
+    sessionStorage.removeItem('sv_verification');
+    studentEmailConflict.value = false;
+    reserveError.value         = '';
+    svStep.value    = 'email';
+    svError.value   = '';
+    svMessage.value = '';
+    svOtp.value     = '';
+    svLrn.value     = '';
+    svIdFile.value  = null;
+    svModal.value   = true;
 }
 
 function proceedToCheckout() {
@@ -357,11 +371,13 @@ async function svVerifyOtp() {
         const data = res.data;
 
         if (data.status === 'approved') {
-            svAccessToken.value = data.access_token;
-            svType.value        = data.student_type;
+            svAccessToken.value        = data.access_token;
+            svType.value               = data.student_type;
             storeSvSession(data.access_token, data.student_type);
-            svStep.value        = 'approved';
-            svMessage.value     = data.message;
+            studentEmailConflict.value = false;
+            reserveError.value         = '';
+            svStep.value               = 'approved';
+            svMessage.value            = data.message;
             if (!email.value.trim()) email.value = svEmail.value;
         } else if (data.status === 'pending_review') {
             svStep.value         = 'pending';
@@ -452,50 +468,63 @@ function svResendOtp() {
             <!-- ── Left: Tier picker ─────────────────────────────────────────── -->
             <CCol xs="12" lg="8">
 
-                <!-- Tier cards -->
-                <CRow class="g-3 mb-4">
-                    <CCol v-for="ticket in tickets" :key="ticket.id" xs="12" sm="6">
-                        <div
-                            @click="select(ticket)"
-                            :class="[
-                                'ticket-tier-card',
-                                selectedTicket?.id === ticket.id ? 'ticket-tier-selected' : '',
-                                inCart(ticket) ? 'ticket-tier-incart' : '',
-                                ticket.sold_out ? 'ticket-tier-soldout' : '',
-                                ticket.type === 'student' && !inCart(ticket) && !ticket.sold_out ? 'ticket-tier-student' : '',
-                            ]"
-                            :style="ticket.sold_out || inCart(ticket) || reserved ? 'cursor:default' : 'cursor:pointer'"
-                        >
-                            <div class="d-flex align-items-start justify-content-between mb-2">
-                                <div>
-                                    <div class="text-uppercase fw-semibold mb-1" style="font-size:.7rem;letter-spacing:.08em;color:inherit;opacity:.7">
-                                        {{ ticket.type === 'student' ? '🎓 Student Only' : ticket.name }}
-                                    </div>
-                                    <div class="fw-bold" style="font-size:1.6rem">
-                                        ₱{{ Number(ticket.price).toLocaleString() }}
-                                    </div>
-                                </div>
-                                <CBadge v-if="inCart(ticket)" color="success" shape="rounded-pill">In Cart</CBadge>
-                                <CBadge v-else-if="ticket.sold_out" color="secondary" shape="rounded-pill">Sold Out</CBadge>
-                                <CBadge v-else color="success" shape="rounded-pill">{{ ticket.available }} left</CBadge>
-                            </div>
-
-                            <p class="small mb-1 opacity-75">
-                                Max {{ ticket.type === 'student' ? '1' : (isGuest ? ticket.max_per_user : 10) }} per person
-                            </p>
-                            <p v-if="ticket.type === 'student'" class="small mb-0 fw-medium" style="color:inherit;opacity:.85">
-                                🎓 Requires student verification · Limit: 1
-                            </p>
-
-                            <!-- Selected checkmark -->
-                            <div v-if="selectedTicket?.id === ticket.id" class="ticket-tier-check">
-                                <svg width="12" height="12" fill="white" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z" clip-rule="evenodd"/>
-                                </svg>
-                            </div>
-                        </div>
-                    </CCol>
-                </CRow>
+                <!-- Ticket table -->
+                <CCard class="mb-4">
+                    <CTable hover responsive class="mb-0">
+                        <CTableHead>
+                            <CTableRow>
+                                <CTableHeaderCell>Ticket Tier</CTableHeaderCell>
+                                <CTableHeaderCell>Type</CTableHeaderCell>
+                                <CTableHeaderCell>Price</CTableHeaderCell>
+                                <CTableHeaderCell>Available</CTableHeaderCell>
+                                <CTableHeaderCell>Max / Person</CTableHeaderCell>
+                                <CTableHeaderCell></CTableHeaderCell>
+                            </CTableRow>
+                        </CTableHead>
+                        <CTableBody>
+                            <CTableRow
+                                v-for="ticket in tickets"
+                                :key="ticket.id"
+                                :class="[
+                                    selectedTicket?.id === ticket.id ? 'table-primary' : '',
+                                    inCart(ticket) ? 'table-success' : '',
+                                    ticket.sold_out ? 'table-secondary' : '',
+                                ]"
+                                :style="ticket.sold_out || inCart(ticket) || reserved ? 'cursor:default' : 'cursor:pointer'"
+                                @click="select(ticket)"
+                            >
+                                <CTableDataCell class="fw-semibold">
+                                    {{ ticket.name }}
+                                </CTableDataCell>
+                                <CTableDataCell>
+                                    <CBadge v-if="ticket.type === 'student'" color="info" shape="rounded-pill">🎓 Student</CBadge>
+                                    <CBadge v-else color="warning" shape="rounded-pill" text-color="dark">Regular</CBadge>
+                                </CTableDataCell>
+                                <CTableDataCell class="fw-bold">
+                                    ₱{{ Number(ticket.price).toLocaleString() }}
+                                </CTableDataCell>
+                                <CTableDataCell>
+                                    <CBadge v-if="ticket.sold_out" color="secondary" shape="rounded-pill">Sold Out</CBadge>
+                                    <span v-else class="text-success fw-semibold">{{ ticket.available }}</span>
+                                </CTableDataCell>
+                                <CTableDataCell class="text-muted small">
+                                    {{ ticket.type === 'student' ? '1' : (isGuest ? ticket.max_per_user : 10) }}
+                                </CTableDataCell>
+                                <CTableDataCell class="text-end">
+                                    <CBadge v-if="inCart(ticket)" color="success" shape="rounded-pill">In Cart</CBadge>
+                                    <CButton
+                                        v-else-if="!ticket.sold_out && !reserved"
+                                        size="sm"
+                                        :color="selectedTicket?.id === ticket.id ? 'primary' : 'outline-primary'"
+                                        @click.stop="select(ticket)"
+                                    >
+                                        {{ selectedTicket?.id === ticket.id ? '✓ Selected' : 'Select' }}
+                                    </CButton>
+                                </CTableDataCell>
+                            </CTableRow>
+                        </CTableBody>
+                    </CTable>
+                </CCard>
 
                 <!-- Student verification status / prompt (when student ticket selected) -->
                 <template v-if="isStudentSelected && selectedTicket">
@@ -648,7 +677,16 @@ function svResendOtp() {
                                     ✅ Proceed to Checkout
                                 </CButton>
 
-                                <CAlert v-if="reserveError" color="danger" class="py-2 mb-0 small">{{ reserveError }}</CAlert>
+                                <template v-if="reserveError">
+                                    <CAlert color="danger" class="py-2 mb-2 small">{{ reserveError }}</CAlert>
+                                    <CAlert v-if="studentEmailConflict" color="warning" class="py-2 mb-0 small">
+                                        <div class="fw-semibold mb-1">Different student email?</div>
+                                        <div class="mb-2">If you have another verified student email that hasn't purchased a ticket yet, you can re-verify with it.</div>
+                                        <CButton size="sm" color="warning" @click="changeStudentEmail">
+                                            Use a Different Student Email
+                                        </CButton>
+                                    </CAlert>
+                                </template>
                                 <p v-if="!reserved" class="text-center text-muted mb-0 mt-2" style="font-size:.75rem">
                                     Seats are held for 10 minutes after reserving.
                                 </p>

@@ -31,17 +31,6 @@ class GuestStudentController extends Controller
             }
         }
 
-        // Check for existing approved verification for this email — return token directly, no new OTP needed
-        $existing = StudentVerification::where('guest_email', $email)->where('status', 'approved')->latest()->first();
-        if ($existing) {
-            $this->refreshToken($existing);
-            return response()->json([
-                'status'       => 'approved',
-                'access_token' => $existing->fresh()->access_token,
-                'student_type' => $existing->student_type,
-            ]);
-        }
-
         // Check for pending review — don't re-send OTP, just inform them
         $pending = StudentVerification::where('guest_email', $email)->where('status', 'pending')->latest()->first();
         if ($pending) {

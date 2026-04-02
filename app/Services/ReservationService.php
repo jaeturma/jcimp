@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\Reservation;
+use App\Models\StudentVerification;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -154,7 +155,13 @@ class ReservationService
         }
 
         // Must be a verified student to hold inventory
-        if (! $user || ! $user->canBuyStudentTicket()) {
+        $isVerified = $user
+            ? $user->canBuyStudentTicket()
+            : StudentVerification::where('guest_email', $email)
+                ->where('status', 'approved')
+                ->exists();
+
+        if (! $isVerified) {
             throw new RuntimeException(
                 'Student tickets require verified student status. '
                 . 'Please complete student verification before purchasing.'

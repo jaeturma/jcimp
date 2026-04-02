@@ -32,6 +32,34 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::get('/tickets', [TicketController::class, 'index']);
     Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
 
+    // Public ticket validity check (read-only, does NOT mark as used)
+    Route::get('/tickets/verify/{qr_code}', function (string $qr_code) {
+        $issued = \App\Models\TicketIssued::with(['ticket.event', 'order'])
+            ->where('qr_code', $qr_code)
+            ->first();
+
+        if (! $issued) {
+            return response()->json(['valid' => false, 'status' => 'not_found', 'message' => 'Ticket not found.'], 404);
+        }
+
+        if (! $issued->order?->isPaid()) {
+            return response()->json(['valid' => false, 'status' => 'unpaid', 'message' => 'This ticket belongs to an unpaid order.'], 422);
+        }
+
+        return response()->json([
+            'valid'       => true,
+            'status'      => $issued->status,
+            'ticket_name' => $issued->ticket?->name,
+            'ticket_type' => $issued->ticket?->type,
+            'event_name'  => $issued->ticket?->event?->name,
+            'event_venue' => $issued->ticket?->event?->venue,
+            'event_date'  => $issued->ticket?->event?->event_date?->toISOString(),
+            'holder_email'=> $issued->holder_email ?? $issued->order?->email,
+            'order_ref'   => $issued->order?->reference,
+            'used_at'     => $issued->used_at?->toISOString(),
+        ]);
+    })->middleware('throttle:30,1');
+
     Route::get('/my-tickets', [MyTicketsController::class, 'index']);
 
     // Issued ticket management (transfer, assign, resell)

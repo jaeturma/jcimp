@@ -7,7 +7,7 @@ import {
     CNavItem,
     CHeader, CHeaderToggler, CHeaderNav,
     CContainer, CDropdown, CDropdownToggle, CDropdownMenu,
-    CDropdownItem, CDropdownDivider, CAvatar,
+    CDropdownItem, CDropdownDivider, CAvatar, CBadge,
 } from '@coreui/vue';
 
 const page      = usePage();
@@ -125,6 +125,13 @@ watch(() => page.url, readSavedCart);
                 <Link :href="route('my-tickets')" class="nav-link">
                     <CIcon customClassName="nav-icon" icon="cil-list" />
                     My Tickets
+                </Link>
+            </CNavItem>
+
+            <CNavItem>
+                <Link :href="route('tickets.verify')" class="nav-link">
+                    <CIcon customClassName="nav-icon" icon="cil-check-circle" />
+                    Verify Ticket
                 </Link>
             </CNavItem>
 
@@ -288,7 +295,7 @@ watch(() => page.url, readSavedCart);
                     <!-- Cart dropdown — always visible -->
                     <CDropdown variant="nav-item" placement="bottom-end">
                         <CDropdownToggle :caret="false" class="position-relative p-1" title="Cart">
-                            <CIcon icon="cil-cart" size="lg" class="text-dark" />
+                            <CIcon icon="cil-cart" size="lg" style="color: #212529 !important" />
                             <CBadge
                                 v-if="savedCart"
                                 color="danger"
@@ -357,7 +364,7 @@ watch(() => page.url, readSavedCart);
                     </template>
 
                     <template v-else>
-                        <Link :href="route('login')" class="btn btn-sm btn-outline-light">
+                        <Link :href="route('login')" class="btn btn-sm btn-outline-dark">
                             Login
                         </Link>
                     </template>

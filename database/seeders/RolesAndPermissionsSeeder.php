@@ -84,7 +84,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view dashboard',
             'view events',
             'view tickets', 'update tickets',
-            'view orders', 'update orders',
+            'view orders', 'create orders', 'update orders',
             'review manual payments',
             'verify students',
             'scan tickets',
