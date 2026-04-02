@@ -14,8 +14,9 @@ class SubmitManualPaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'order_reference' => ['required', 'string', 'exists:orders,reference'],
-            'proof_image'     => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
+            'order_reference'  => ['required', 'string', 'exists:orders,reference'],
+            'proof_image'      => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
+            'g_recaptcha_token' => ['nullable', 'string'],
         ];
     }
 

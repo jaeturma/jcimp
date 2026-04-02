@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import axios from 'axios';
+
+const page = usePage();
 
 const props = defineProps({
     cartItems:  { type: Array,  default: () => [] },
@@ -17,6 +19,39 @@ const order           = ref(null);
 const proofUploaded   = ref(false);
 const proofSubmitting = ref(false);
 const proofError      = ref('');
+
+// ── reCAPTCHA ──────────────────────────────────────────────────────────────────
+const recaptchaSiteKey = computed(() => page.props.recaptchaSiteKey ?? '');
+const needsCaptcha     = computed(() => !!recaptchaSiteKey.value);
+const captchaToken     = ref('');
+const captchaError     = ref('');
+
+function loadRecaptcha() {
+    if (!recaptchaSiteKey.value) return;
+
+    window.onRecaptchaProofSuccess = (token) => { captchaToken.value = token; captchaError.value = ''; };
+    window.onRecaptchaProofExpired = ()       => { captchaToken.value = ''; };
+    window.onRecaptchaProofLoaded  = ()       => {
+        const el = document.getElementById('recaptcha-container-proof');
+        if (window.grecaptcha && el && !el.hasChildNodes()) {
+            window.grecaptcha.render('recaptcha-container-proof', {
+                sitekey:            recaptchaSiteKey.value,
+                callback:           'onRecaptchaProofSuccess',
+                'expired-callback': 'onRecaptchaProofExpired',
+            });
+        }
+    };
+
+    if (!document.getElementById('recaptcha-script')) {
+        const s = document.createElement('script');
+        s.id    = 'recaptcha-script';
+        s.src   = 'https://www.google.com/recaptcha/api.js?onload=onRecaptchaProofLoaded&render=explicit';
+        s.async = true; s.defer = true;
+        document.head.appendChild(s);
+    } else if (window.grecaptcha) {
+        window.onRecaptchaProofLoaded();
+    }
+}
 
 // ── Countdown ──────────────────────────────────────────────────────────────────
 const secondsLeft = ref(0);
@@ -47,6 +82,9 @@ onMounted(async () => {
 
     // Auto-place order immediately — skip the confirmation screen
     await placeOrder();
+
+    // Load reCAPTCHA after order is placed (widget needs to be in DOM)
+    loadRecaptcha();
 });
 
 onUnmounted(() => clearInterval(timer));
@@ -64,32 +102,17 @@ const cartTotal = computed(() =>
     props.cartItems.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0)
 );
 
-// Unique QR groups from the cart by ticket tier
-const ticketQrGroups = computed(() => {
-    const groups = new Map();
-    for (const item of props.cartItems) {
-        const key = item.ticket_id ?? `${item.ticket_name}-${item.ticket_type}`;
-        if (!groups.has(key)) {
-            groups.set(key, {
-                ticketId: item.ticket_id,
-                ticketName: item.ticket_name || `Ticket ${item.ticket_id}`,
-                ticketType: item.ticket_type || '',
-                quantity: Number(item.quantity) || 1,
-                gcashQrUrl: item.gcash_qr_url || null,
-                secondaryQrUrl: item.secondary_qr_url || null,
-            });
-        }
-    }
-    return Array.from(groups.values());
-});
-
-const hasTicketQrs = computed(() =>
-    ticketQrGroups.value.some(group => group.gcashQrUrl || group.secondaryQrUrl)
-);
-
 const totalQty = computed(() =>
     props.cartItems.reduce((s, i) => s + Number(i.quantity), 0)
 );
+
+// QR 1 (single ticket) = gcash_qr_url; QR 2 (2+ tickets) = secondary_qr_url or /bulkqr.png
+const displayQrUrl = computed(() => {
+    if (totalQty.value === 1) {
+        return props.cartItems.find(i => i.gcash_qr_url)?.gcash_qr_url ?? null;
+    }
+    return props.cartItems.find(i => i.secondary_qr_url)?.secondary_qr_url ?? '/bulkqr.png';
+});
 
 // ── Place order (called automatically on mount) ────────────────────────────────
 async function placeOrder() {
@@ -118,12 +141,15 @@ async function placeOrder() {
 // ── Upload proof ───────────────────────────────────────────────────────────────
 async function uploadProof() {
     if (!proofFile.value) { proofError.value = 'Please select a file.'; return; }
+    if (needsCaptcha.value && !captchaToken.value) { captchaError.value = 'Please complete the reCAPTCHA challenge.'; return; }
     proofSubmitting.value = true;
     proofError.value      = '';
+    captchaError.value    = '';
 
     const fd = new FormData();
     fd.append('order_reference', order.value.order_reference);
     fd.append('proof_image', proofFile.value);
+    if (captchaToken.value) fd.append('g_recaptcha_token', captchaToken.value);
 
     try {
         await axios.post('/api/checkout/proof', fd, {
@@ -135,6 +161,8 @@ async function uploadProof() {
         }, 1500);
     } catch (e) {
         proofError.value = e.response?.data?.message ?? 'Upload failed. Try again.';
+        captchaToken.value = '';
+        if (window.grecaptcha) { try { window.grecaptcha.reset(); } catch {} }
     } finally {
         proofSubmitting.value = false;
     }
@@ -227,82 +255,41 @@ async function uploadProof() {
                                 Order: <span class="font-monospace fw-semibold text-primary">{{ order.order_reference }}</span>
                             </p>
 
-                            <!-- QR code pairs for each ticket tier -->
-                            <template v-if="hasTicketQrs">
-                                <p class="small fw-semibold text-muted mb-2">Scan to Pay</p>
-                                <div class="d-flex flex-column gap-4 mb-4">
-                                    <div v-for="group in ticketQrGroups" :key="group.ticketId || group.ticketName" class="border rounded p-3 bg-body-secondary">
-                                        <div class="d-flex flex-column flex-sm-row align-items-start justify-content-between gap-3 mb-3">
-                                            <div>
-                                                <div class="fw-semibold">{{ group.ticketName }}</div>
-                                                <div class="text-muted small">Quantity: {{ group.quantity }}</div>
-                                            </div>
-                                            <div class="text-end text-muted small">
-                                                <span v-if="group.gcashQrUrl || group.secondaryQrUrl">Scan either QR code to complete payment.</span>
-                                                <span v-else>No QR available for this tier.</span>
-                                            </div>
-                                        </div>
-                                        <div class="row row-cols-1 row-cols-md-2 gx-3 gy-3 justify-content-center">
-                                            <template v-if="group.gcashQrUrl">
-                                                <div class="col d-flex flex-column align-items-center text-center">
-                                                    <img
-                                                        :src="group.gcashQrUrl"
-                                                        alt="GCash QR Code"
-                                                        class="border border-2 border-success rounded p-2 mb-3"
-                                                        style="max-width:200px;max-height:200px;object-fit:contain"
-                                                    />
-                                                    <div class="text-muted small mb-3">GCash QR Code</div>
-                                                    <a
-                                                        :href="group.gcashQrUrl"
-                                                        :download="`gcash-qr-${group.ticketId || group.ticketName}.png`"
-                                                        class="btn btn-sm btn-outline-success"
-                                                    >
-                                                        ⬇ Download QR Code
-                                                    </a>
-                                                </div>
-                                            </template>
-                                            <template v-if="group.secondaryQrUrl">
-                                                <div class="col d-flex flex-column align-items-center text-center">
-                                                    <img
-                                                        :src="group.secondaryQrUrl"
-                                                        alt="Secondary QR Code"
-                                                        class="border border-2 border-secondary rounded p-2 mb-3"
-                                                        style="max-width:200px;max-height:200px;object-fit:contain"
-                                                    />
-                                                    <div class="text-muted small mb-3">Alternate QR Code</div>
-                                                    <a
-                                                        :href="group.secondaryQrUrl"
-                                                        :download="`secondary-qr-${group.ticketId || group.ticketName}.png`"
-                                                        class="btn btn-sm btn-outline-secondary"
-                                                    >
-                                                        ⬇ Download QR Code
-                                                    </a>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </div>
-                            </template>
-                            <template v-else-if="totalQty > 1">
-                                <p class="small fw-semibold text-muted mb-2">Scan to Pay</p>
-                                <div class="d-flex flex-wrap gap-3 justify-content-center mb-4">
-                                    <div class="text-center">
-                                        <img
-                                            src="/bulkqr.png"
-                                            alt="GCash QR"
-                                            class="border rounded shadow-sm"
-                                            style="max-width:200px; width:100%;"
-                                        />
-                                        <div class="text-muted small mt-1">GCash / InstaPay</div>
-                                    </div>
+                            <!-- QR code: QR 1 for single ticket, QR 2 for 2+ tickets -->
+                            <template v-if="displayQrUrl">
+                                <p class="small fw-semibold text-muted mb-2 text-center">Scan to Pay</p>
+                                <div class="d-flex flex-column align-items-center mb-4">
+                                    <img
+                                        :src="displayQrUrl"
+                                        alt="GCash QR"
+                                        class="border rounded shadow-sm mb-3"
+                                        style="width:100%;max-width:300px;"
+                                    />
+                                    <div class="text-muted small mb-3">GCash / InstaPay</div>
+                                    <a
+                                        :href="displayQrUrl"
+                                        download="payment-qr.png"
+                                        class="btn btn-sm btn-outline-success"
+                                    >
+                                        ⬇ Download QR
+                                    </a>
                                 </div>
                             </template>
 
                             <CAlert color="warning" class="mb-4">
-                                <strong>Payment Instructions</strong><br />
-                                Amount: <strong>₱{{ cartTotal.toLocaleString() }}</strong><br />
-                                Reference: <strong>{{ order.order_reference }}</strong><br />
-                                <span class="small">Scan the QR above{{ hasTicketQrs ? '' : ' or transfer via GCash / Bank' }}, then upload your screenshot below.</span>
+                                <div class="fw-semibold mb-2">Payment Instructions</div>
+                                <template v-if="totalQty > 1">
+                                    <div class="mb-1">Enter exact amount: <strong>₱{{ cartTotal.toLocaleString() }}</strong></div>
+                                </template>
+                                <div class="mb-2">Reference / Note: <strong>{{ order.order_reference }}</strong></div>
+                                <ol class="mb-0 ps-3 small">
+                                    <li>Open your GCash or any payment app.</li>
+                                    <li><strong>Scan the QR</strong> using your app's QR scanner, <em>or</em> <strong>download the QR</strong> image and upload it inside your payment app.</li>
+                                    <li v-if="totalQty > 1">Enter the <strong>exact amount</strong> of <strong>₱{{ cartTotal.toLocaleString() }}</strong> when prompted.</li>
+                                    <li>Add the <strong>reference number</strong> above in the notes/remarks field.</li>
+                                    <li>Take a <strong>screenshot</strong> of your payment confirmation.</li>
+                                    <li>Upload the screenshot below and click <strong>Submit Payment Proof</strong>.</li>
+                                </ol>
                             </CAlert>
 
                             <CForm>
@@ -319,11 +306,16 @@ async function uploadProof() {
                                     {{ proofError }}
                                 </CAlert>
 
+                                <template v-if="needsCaptcha">
+                                    <div id="recaptcha-container-proof" class="mb-3"></div>
+                                    <div v-if="captchaError" class="text-danger small mb-2">{{ captchaError }}</div>
+                                </template>
+
                                 <CButton
                                     color="success"
                                     class="w-100"
                                     @click="uploadProof"
-                                    :disabled="proofSubmitting"
+                                    :disabled="proofSubmitting || (needsCaptcha && !captchaToken)"
                                 >
                                     <CSpinner v-if="proofSubmitting" size="sm" class="me-2" />
                                     {{ proofSubmitting ? 'Uploading…' : '📤 Submit Payment Proof' }}

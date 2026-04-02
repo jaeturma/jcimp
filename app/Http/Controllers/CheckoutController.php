@@ -71,6 +71,25 @@ class CheckoutController extends Controller
      */
     public function uploadProof(SubmitManualPaymentRequest $request): JsonResponse
     {
+        // ── reCAPTCHA verification ──────────────────────────────────────────
+        $secretKey = config('services.recaptcha.secret_key');
+        if ($secretKey) {
+            $token = $request->input('g_recaptcha_token');
+            if (! $token) {
+                return response()->json(['message' => 'Please complete the reCAPTCHA challenge.'], 422);
+            }
+
+            $verify = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+                'secret'   => $secretKey,
+                'response' => $token,
+                'remoteip' => $request->ip(),
+            ]);
+
+            if (! ($verify->json('success') ?? false)) {
+                return response()->json(['message' => 'reCAPTCHA verification failed. Please try again.'], 422);
+            }
+        }
+
         $order = Order::where('reference', $request->string('order_reference'))
             ->where('payment_method', 'manual')
             ->firstOrFail();

@@ -34,10 +34,15 @@ class TicketCardService
     {
         $this->fontPaths = [
             base_path('resources/fonts/arial.ttf'),
+            base_path('resources/fonts/DejaVuSans.ttf'),
             'C:/Windows/Fonts/arial.ttf',
             '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf',
             '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
             '/usr/share/fonts/dejavu/DejaVuSans.ttf',
+            '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+            '/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf',
+            '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
+            '/usr/share/fonts/gnu-free/FreeSans.ttf',
         ];
     }
 
@@ -93,16 +98,16 @@ class TicketCardService
 
     private function drawBackground(GdImage $canvas, TicketIssued $issued): void
     {
-        $bgUrl = $issued->ticket?->ticket_image_url
-            ?? $issued->ticket?->event?->cover_url
+        // Read from disk directly — never HTTP-fetch (server can't reliably reach itself in production)
+        $bgPath = $issued->ticket?->ticket_image
+            ?? $issued->ticket?->event?->cover_image
             ?? null;
 
         $bgLoaded = false;
 
-        if ($bgUrl) {
+        if ($bgPath) {
             try {
-                $context = stream_context_create(['http' => ['timeout' => 5]]);
-                $data    = @file_get_contents($bgUrl, false, $context);
+                $data = \Illuminate\Support\Facades\Storage::disk('public')->get($bgPath);
 
                 if ($data) {
                     $src = @imagecreatefromstring($data);
@@ -289,10 +294,15 @@ class TicketCardService
     {
         $blackPaths = [
             base_path('resources/fonts/ariblk.ttf'),
+            base_path('resources/fonts/DejaVuSans-Bold.ttf'),
             'C:/Windows/Fonts/ariblk.ttf',
             '/usr/share/fonts/truetype/msttcorefonts/Arial_Black.ttf',
             '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
             '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',
+            '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+            '/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf',
+            '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
+            '/usr/share/fonts/gnu-free/FreeSansBold.ttf',
         ];
         foreach ($blackPaths as $path) {
             if (file_exists($path)) {
