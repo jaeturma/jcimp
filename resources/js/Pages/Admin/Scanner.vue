@@ -9,6 +9,12 @@ import jsQR from 'jsqr';
 // 'manual' | 'camera' | 'image'
 const mode = ref('manual');
 
+// ── Confirm vs Automatic ──────────────────────────────────────────────────────
+const confirmMode   = ref(false);   // false = automatic, true = confirm before admitting
+const pendingCode   = ref('');      // QR code waiting for confirmation
+const pendingTicket = ref(null);    // preview data from read-only verify
+const previewing    = ref(false);   // loading preview
+
 // ── Manual input ─────────────────────────────────────────────────────────────
 const qrInput  = ref('');
 const inputRef = ref(null);
@@ -65,14 +71,79 @@ async function loadStats() {
 }
 
 // ── Core scan ─────────────────────────────────────────────────────────────────
+async function handleCode(code) {
+    if (!code) return;
+    if (confirmMode.value) {
+        await previewScan(code);
+    } else {
+        await submitScan(code);
+    }
+}
+
+// Read-only preview — does NOT mark ticket as used
+async function previewScan(code) {
+    if (!code || previewing.value) return;
+
+    const now = Date.now();
+    if (code === lastCode && now - lastCodeTs < 2000) return;
+    lastCode   = code;
+    lastCodeTs = now;
+
+    previewing.value    = true;
+    pendingCode.value   = code;
+    pendingTicket.value = null;
+    result.value        = null;
+
+    // Pause camera while waiting for confirmation
+    if (mode.value === 'camera') cameraScanning.value = false;
+
+    try {
+        const res = await axios.get(`/api/tickets/verify/${encodeURIComponent(code)}`);
+        pendingTicket.value = res.data;
+    } catch (e) {
+        pendingTicket.value = e.response?.data
+            ?? { valid: false, status: 'not_found', message: 'Ticket not found.' };
+    } finally {
+        previewing.value = false;
+        qrInput.value    = '';
+    }
+}
+
+async function confirmEntry() {
+    await submitScan(pendingCode.value);
+    clearPending();
+    if (mode.value === 'camera') {
+        cameraScanning.value = true;
+        scanCameraFrame();
+    }
+}
+
+function cancelPending() {
+    clearPending();
+    if (mode.value === 'camera') {
+        cameraScanning.value = true;
+        scanCameraFrame();
+    }
+    if (mode.value === 'manual') inputRef.value?.focus();
+}
+
+function clearPending() {
+    pendingCode.value   = '';
+    pendingTicket.value = null;
+    result.value        = null;
+    qrInput.value       = '';
+}
+
 async function submitScan(code) {
     if (!code || scanning.value) return;
 
     // Cooldown: ignore same code within 2 seconds
     const now = Date.now();
-    if (code === lastCode && now - lastCodeTs < 2000) return;
-    lastCode   = code;
-    lastCodeTs = now;
+    if (!confirmMode.value) {
+        if (code === lastCode && now - lastCodeTs < 2000) return;
+        lastCode   = code;
+        lastCodeTs = now;
+    }
 
     scanning.value = true;
     result.value   = null;
@@ -97,7 +168,7 @@ async function submitScan(code) {
 
 // ── Manual ────────────────────────────────────────────────────────────────────
 function handleEnter(e) {
-    if (e.key === 'Enter') submitScan(qrInput.value.trim());
+    if (e.key === 'Enter') handleCode(qrInput.value.trim());
 }
 
 // ── Camera ────────────────────────────────────────────────────────────────────
@@ -142,7 +213,8 @@ function scanCameraFrame() {
         const decoded = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
 
         if (decoded?.data) {
-            submitScan(decoded.data);
+            handleCode(decoded.data);
+            if (confirmMode.value) return; // pause — resume after confirm/cancel
         }
     }
 
@@ -192,7 +264,7 @@ function decodeImage(file) {
             imageDecoding.value = false;
 
             if (decoded?.data) {
-                submitScan(decoded.data);
+                handleCode(decoded.data);
             } else {
                 imageError.value = 'No QR code detected in this image. Try a clearer or closer photo.';
             }
@@ -237,6 +309,14 @@ const historyBadgeColor = (r) => {
     <AppLayout>
         <div class="page-header">
             <h1 class="page-title">Ticket Scanner</h1>
+            <CButton
+                :color="confirmMode ? 'warning' : 'success'"
+                size="sm"
+                class="text-white"
+                @click="confirmMode = !confirmMode; clearPending()"
+            >
+                {{ confirmMode ? '🔒 Confirm Mode' : '⚡ Automatic Mode' }}
+            </CButton>
         </div>
 
         <CContainer fluid class="p-0">
@@ -329,11 +409,11 @@ const historyBadgeColor = (r) => {
                             <CButton
                                 color="primary"
                                 class="w-100"
-                                :disabled="scanning || !qrInput.trim()"
-                                @click="submitScan(qrInput.trim())"
+                                :disabled="scanning || previewing || !qrInput.trim()"
+                                @click="handleCode(qrInput.trim())"
                             >
-                                <CSpinner v-if="scanning" size="sm" class="me-1" />
-                                {{ scanning ? 'Checking…' : 'Validate Ticket' }}
+                                <CSpinner v-if="scanning || previewing" size="sm" class="me-1" />
+                                {{ scanning ? 'Checking…' : previewing ? 'Loading…' : 'Validate Ticket' }}
                             </CButton>
                             <p class="text-muted small mt-2 mb-0">Press Enter after scanning</p>
                         </CCardBody>
@@ -461,6 +541,75 @@ const historyBadgeColor = (r) => {
                             </p>
                         </CCardBody>
                     </CCard>
+
+                    <!-- Confirm Mode: pending confirmation panel -->
+                    <transition name="slide">
+                        <CCard v-if="pendingTicket" class="mb-3 border-warning">
+                            <CCardHeader class="bg-warning text-dark fw-semibold d-flex align-items-center justify-content-between">
+                                <span>🔒 Confirm Entry?</span>
+                                <CSpinner v-if="previewing" size="sm" />
+                            </CCardHeader>
+                            <CCardBody>
+                                <template v-if="pendingTicket.valid">
+                                    <CRow class="g-2 mb-3 small">
+                                        <CCol xs="6">
+                                            <div class="text-muted" style="font-size:.7rem">TICKET</div>
+                                            <div class="fw-semibold">{{ pendingTicket.ticket_name }}</div>
+                                        </CCol>
+                                        <CCol xs="6">
+                                            <div class="text-muted" style="font-size:.7rem">TYPE</div>
+                                            <CBadge :color="pendingTicket.ticket_type === 'student' ? 'info' : 'warning'" text-color="dark" class="text-capitalize">
+                                                {{ pendingTicket.ticket_type }}
+                                            </CBadge>
+                                        </CCol>
+                                        <CCol xs="6">
+                                            <div class="text-muted" style="font-size:.7rem">EVENT</div>
+                                            <div>{{ pendingTicket.event_name }}</div>
+                                        </CCol>
+                                        <CCol xs="6">
+                                            <div class="text-muted" style="font-size:.7rem">STATUS</div>
+                                            <CBadge :color="pendingTicket.status === 'valid' ? 'success' : 'warning'" class="text-capitalize">
+                                                {{ pendingTicket.status }}
+                                            </CBadge>
+                                        </CCol>
+                                        <CCol xs="12">
+                                            <div class="text-muted" style="font-size:.7rem">HOLDER</div>
+                                            <div class="text-break">{{ pendingTicket.holder_email }}</div>
+                                        </CCol>
+                                        <CCol xs="12">
+                                            <div class="text-muted" style="font-size:.7rem">ORDER REF</div>
+                                            <div class="font-monospace small">{{ pendingTicket.order_ref }}</div>
+                                        </CCol>
+                                    </CRow>
+                                    <CAlert v-if="pendingTicket.status === 'used'" color="warning" class="py-2 small mb-3">
+                                        ⚠️ This ticket has already been used.
+                                    </CAlert>
+                                    <div class="d-flex gap-2">
+                                        <CButton
+                                            color="success"
+                                            class="flex-grow-1 text-white fw-semibold"
+                                            :disabled="scanning || pendingTicket.status === 'used'"
+                                            @click="confirmEntry"
+                                        >
+                                            <CSpinner v-if="scanning" size="sm" class="me-1" />
+                                            {{ scanning ? 'Admitting…' : '✅ Confirm Entry' }}
+                                        </CButton>
+                                        <CButton color="danger" variant="outline" @click="cancelPending">
+                                            Cancel
+                                        </CButton>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <CAlert color="danger" class="mb-3 py-2">
+                                        {{ pendingTicket.message }}
+                                    </CAlert>
+                                    <CButton color="secondary" variant="outline" size="sm" class="w-100" @click="cancelPending">
+                                        Dismiss
+                                    </CButton>
+                                </template>
+                            </CCardBody>
+                        </CCard>
+                    </transition>
 
                     <!-- Scan Result -->
                     <transition name="slide">

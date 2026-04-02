@@ -530,15 +530,35 @@ function svResendOtp() {
                 <template v-if="isStudentSelected && selectedTicket">
 
                     <!-- In-session guest verified -->
-                    <CAlert v-if="svAccessToken" color="success" class="d-flex align-items-center gap-2 mb-3">
-                        ✅ <span>Student verified ({{ svType }}) — you can add this ticket to your cart.</span>
-                    </CAlert>
+                    <template v-if="svAccessToken">
+                        <CAlert color="success" class="d-flex align-items-center gap-2 mb-2">
+                            ✅ <span>Student verified ({{ svType }}) — you can add this ticket to your cart.</span>
+                        </CAlert>
+                        <div v-if="svType === 'highschool'" class="rounded p-3 mb-3 small" style="background:#fff3cd;border:1px solid #ffc107;">
+                            <p class="fw-bold mb-1" style="color:#7d5900;">⚠️ Bring Your Physical Student ID on Event Day</p>
+                            <ul class="mb-1 ps-3" style="color:#7d5900;line-height:1.7">
+                                <li>Valid, <strong>non-expired</strong> school-issued student ID required.</li>
+                                <li>ID must show the current <strong>School Year</strong>.</li>
+                            </ul>
+                            <p class="mb-0 fw-semibold" style="color:#c0392b;">❗ No valid ID = converted to General Admission + ₱300 additional fee.</p>
+                        </div>
+                    </template>
 
                     <!-- Logged-in user verified -->
-                    <CAlert v-else-if="studentVerified" color="success" class="d-flex align-items-center gap-2 mb-3">
-                        ✅ <span>Student status verified
-                            <span class="text-capitalize">({{ studentStatus.student_type }})</span></span>
-                    </CAlert>
+                    <template v-else-if="studentVerified">
+                        <CAlert color="success" class="d-flex align-items-center gap-2 mb-2">
+                            ✅ <span>Student status verified
+                                <span class="text-capitalize">({{ studentStatus.student_type }})</span></span>
+                        </CAlert>
+                        <div v-if="studentStatus.student_type === 'highschool'" class="rounded p-3 mb-3 small" style="background:#fff3cd;border:1px solid #ffc107;">
+                            <p class="fw-bold mb-1" style="color:#7d5900;">⚠️ Bring Your Physical Student ID on Event Day</p>
+                            <ul class="mb-1 ps-3" style="color:#7d5900;line-height:1.7">
+                                <li>Valid, <strong>non-expired</strong> school-issued student ID required.</li>
+                                <li>ID must show the current <strong>School Year</strong>.</li>
+                            </ul>
+                            <p class="mb-0 fw-semibold" style="color:#c0392b;">❗ No valid ID = converted to General Admission + ₱300 additional fee.</p>
+                        </div>
+                    </template>
 
                     <!-- Logged-in user pending -->
                     <CAlert v-else-if="studentPending" color="warning" class="mb-3">
@@ -752,6 +772,19 @@ function svResendOtp() {
                                 These will be reviewed by our admin after your OTP is verified.
                             </p>
 
+                            <!-- Student ID reminder notice -->
+                            <div class="rounded p-3 mb-3" style="background:#fff3cd;border:1px solid #ffc107;">
+                                <p class="fw-bold mb-2" style="color:#7d5900;font-size:.85rem;">⚠️ Important: Physical Student ID Required at the Event</p>
+                                <ul class="mb-2 ps-3 small" style="color:#7d5900;line-height:1.7">
+                                    <li>Bring your <strong>valid and non-expired</strong> school-issued student ID on the event day.</li>
+                                    <li>Your student ID must show the current <strong>School Year</strong>.</li>
+                                    <li>An ID without a School Year will <strong>not be accepted</strong>.</li>
+                                </ul>
+                                <p class="mb-0 small fw-semibold" style="color:#c0392b;">
+                                    ❗ Failure to present a valid ID at the venue will result in your ticket being converted to <strong>General Admission + ₱300</strong> additional fee.
+                                </p>
+                            </div>
+
                             <div class="mb-3">
                                 <CFormLabel class="fw-semibold">
                                     LRN Number (12 digits) <span class="text-danger">*</span>
@@ -838,14 +871,27 @@ function svResendOtp() {
                 </div>
 
                 <!-- ── Step 3b: Approved ──────────────────────────────────── -->
-                <div v-else-if="svStep === 'approved'" class="text-center py-3">
-                    <div style="font-size:3.5rem">✅</div>
-                    <h6 class="fw-semibold mt-2 text-success">Student Verified!</h6>
-                    <p class="text-muted small">
-                        Your student status has been confirmed
-                        <span v-if="svType">({{ svType }})</span>.
-                        You can now add the student ticket to your cart.
-                    </p>
+                <div v-else-if="svStep === 'approved'">
+                    <div class="text-center py-2">
+                        <div style="font-size:3.5rem">✅</div>
+                        <h6 class="fw-semibold mt-2 text-success">Student Verified!</h6>
+                        <p class="text-muted small">
+                            Your student status has been confirmed
+                            <span v-if="svType">({{ svType }})</span>.
+                            You can now add the student ticket to your cart.
+                        </p>
+                    </div>
+                    <!-- Show reminder only for highschool (non-.edu.ph) -->
+                    <div v-if="svType === 'highschool'" class="rounded p-3 mt-1" style="background:#fff3cd;border:1px solid #ffc107;">
+                        <p class="fw-bold mb-2" style="color:#7d5900;font-size:.85rem;">⚠️ Reminder: Bring Your Physical Student ID</p>
+                        <ul class="mb-2 ps-3 small" style="color:#7d5900;line-height:1.7">
+                            <li>Bring your <strong>valid and non-expired</strong> student ID on the event day.</li>
+                            <li>Your ID must display the current <strong>School Year</strong>.</li>
+                        </ul>
+                        <p class="mb-0 small fw-semibold" style="color:#c0392b;">
+                            ❗ Failure to present a valid ID will convert your ticket to <strong>General Admission + ₱300</strong> additional fee.
+                        </p>
+                    </div>
                 </div>
 
                 <!-- ── Step 3c: Rejected ──────────────────────────────────── -->

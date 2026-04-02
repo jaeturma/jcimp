@@ -79,6 +79,11 @@
         .summary-row.total { font-weight: 700; font-size: 15px; color: #1a1a2e; padding-top: 10px; border-top: 1px solid #dee0ea; margin-top: 4px; margin-bottom: 0; }
 
         .notice { margin-top: 22px; background: #fff8e1; border: 1px solid #ffc107; border-radius: 6px; padding: 12px 16px; font-size: 13px; color: #7d5900; line-height: 1.5; }
+        .student-notice { margin-top: 16px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 16px 20px; font-size: 13px; color: #7d5900; line-height: 1.6; }
+        .student-notice h3 { font-size: 14px; font-weight: 800; color: #7d5900; margin-bottom: 10px; }
+        .student-notice ul { padding-left: 20px; margin: 8px 0; }
+        .student-notice li { margin-bottom: 5px; }
+        .student-notice .penalty { margin-top: 12px; padding: 10px 14px; background: #fde8e8; border: 1px solid #e74c3c; border-radius: 6px; color: #c0392b; font-weight: 700; font-size: 13px; }
 
         /* Footer */
         .email-footer { background: #e8eaf0; text-align: center; padding: 18px; font-size: 11px; color: #aaa; border-radius: 0 0 10px 10px; border-top: 1px solid #d8dae8; }
@@ -218,6 +223,24 @@
             ⚠️ <strong>Important:</strong> Each QR code is valid for <strong>single entry only</strong>.
             Do not share your QR code with others. Keep this email safe.
         </div>
+
+        {{-- Student ID reminder — only shown when the order contains a student ticket --}}
+        @if($items->contains(fn($item) => $item->ticket?->type === 'student'))
+        <div class="student-notice">
+            <h3>🎓 Student Ticket Holder — Required Action on Event Day</h3>
+            <p>You purchased a <strong>Student Ticket</strong>. Please read the following carefully:</p>
+            <ul>
+                <li>You are required to bring your <strong>valid and non-expired</strong> school-issued Student ID.</li>
+                <li>Your Student ID must clearly show the current <strong>School Year</strong>.</li>
+                <li>An ID with no School Year indicated will <strong>not be accepted</strong>.</li>
+                <li>Your ID will be checked at the venue entrance before admission.</li>
+            </ul>
+            <div class="penalty">
+                ❗ Failure to present a valid Student ID at the venue will result in your ticket being
+                converted to <strong>General Admission + ₱300 additional fee</strong> payable on-site.
+            </div>
+        </div>
+        @endif
 
     </div>
 
